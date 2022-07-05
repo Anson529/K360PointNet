@@ -8,13 +8,13 @@ import numpy as np
 
 class SampleData(Dataset):
 
-    def __init__(self, data_path, info_path, max_points=20000, eps=0):
+    def __init__(self, args):
         
-        self.data_path = data_path
-        self.eps = eps
-        self.max_points = max_points
+        self.data_path = args.data_path
+        self.eps = args.eps
+        self.max_num_points = args.max_num_points
 
-        with open(info_path, 'rb') as f:
+        with open(args.info_path, 'rb') as f:
             self.data_info = pickle.load(f)
 
     def __len__(self):
@@ -62,12 +62,12 @@ class SampleData(Dataset):
         R = sample_info['R']
         T = sample_info['T'] - box_center
 
-        pts = np.zeros((self.max_points, 3))
+        pts = np.zeros((self.max_num_points, 3))
         np.random.shuffle(pcd)
 
-        for i in range(self.max_points):
-            if i < len(pcd):
-                pts[i] = pcd[i]
+        if len(pcd):
+            for i in range(self.max_num_points):
+                pts[i] = pcd[i % len(pcd)]
             # else:
             #     pts[i] = [100, 100, 100]
         
@@ -78,14 +78,17 @@ class SampleData(Dataset):
 
         return pts, R, T
         
-        
+from train import getparser
 
 if __name__ == '__main__':
     data_path = 'E:\work\kitti360\code\processed/vegetation\grid'
     info_path = 'E:\work\kitti360\code\processed/vegetation\data/info.pkl'
     
-    # print (233)
-    dataset = SampleData(data_path, info_path, eps=0)
+    parser = getparser()
+    args = parser.parse_args()
+
+    torch.manual_seed(42)
+    dataset = SampleData(args)
     
     for i in range(200):
         dataset.visualize(5715)
