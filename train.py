@@ -20,6 +20,7 @@ def getparser():
 
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--num_epochs', type=int, default=20)
+    parser.add_argument('--grad_cumulate', type=int, default=1)
     parser.add_argument('--lr', type=float, default=1e-3)
 
     parser.add_argument('--device', type=str, default='cuda:0')
@@ -49,6 +50,7 @@ if __name__ == '__main__':
     criterion = torch.nn.MSELoss()
 
     Losses = []
+    steps = 0
 
     for epoch in range(0, args.num_epochs):
 
@@ -60,16 +62,20 @@ if __name__ == '__main__':
             output = data[2].to(args.device)
             # print (input.dtype)
             ret = model(input)
+            # print (output)
             
-            loss = criterion(ret, data[2])
-
-            optimizer.zero_grad()
+            loss = criterion(ret, output)
             loss.backward()
-            optimizer.step()
 
+            steps += 1
+
+            if steps % args.grad_cumulate == 0:
+                optimizer.step()
+                optimizer.zero_grad()
+                
             losses.append(loss.item())
-
             Losses.append(np.mean(losses))
+            print (Losses[-1])
 
             if idx % 10 == 0:
                 import matplotlib.pyplot as plt
