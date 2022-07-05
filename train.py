@@ -114,6 +114,9 @@ if __name__ == '__main__':
                 plt.savefig(f'{args.work_dir}/train_curve.png')
                 plt.cla()
 
+                # if len(Losses) > 1 and Losses[-1] - Losses[-2] > 1:
+                #     print ('error message', output)
+                
                 logs.append({'epoch': epoch, 'step': idx, 'loss_mean': Losses[-1]})
                 save_log(logs, args.work_dir)
 

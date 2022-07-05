@@ -1,3 +1,4 @@
+from matplotlib.pyplot import box
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
@@ -10,6 +11,7 @@ class SampleData(Dataset):
 
     def __init__(self, args):
         
+        self.point_cloud_range = args.point_cloud_range
         self.data_path = args.data_path
         self.eps = args.eps
         self.max_num_points = args.max_num_points
@@ -47,9 +49,10 @@ class SampleData(Dataset):
     def __getitem__(self, idx):
         sample_info = self.data_info[idx]
 
+        # zero-center
         box_bound = self.getbox(sample_info['bbox']) #+ [-1, -1, -1, 1, 1, 1]
         box_center = (box_bound[:3] + box_bound[3:]) / 2
-
+        
         pcd = np.load(os.path.join(self.data_path, sample_info['pcd_path']))[:, :3]
         
         bound_x = np.logical_and(pcd[:, 0] > box_bound[0], pcd[:, 0] < box_bound[3])
@@ -65,16 +68,20 @@ class SampleData(Dataset):
         pts = np.zeros((self.max_num_points, 3))
         np.random.shuffle(pcd)
 
+        # fix length
         if len(pcd):
             for i in range(self.max_num_points):
                 pts[i] = pcd[i % len(pcd)]
-            # else:
-            #     pts[i] = [100, 100, 100]
-        
-        # print (idx, len(pcd))
-        pts = torch.FloatTensor(pts)
+        # rescale
+        box_bound[3: ] -= box_center
+        scales = [1, 1, 1]          
+        for i in range(3):
+            if box_bound[3 + i] > 0:
+                scales[i] = self.point_cloud_range[3 + i] / box_bound[3 + i]
+
+        pts = torch.FloatTensor(pts * scales)
         R = torch.FloatTensor(R)
-        T = torch.FloatTensor(T)
+        T = torch.FloatTensor(T * scales)
 
         return pts, R, T
         
