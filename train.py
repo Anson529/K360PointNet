@@ -14,10 +14,9 @@ def getparser():
 
     parser.add_argument('--voxel_size', type=list, default=[0.1, 0.1, 20])
     parser.add_argument('--point_cloud_range', type=list, default=[-10, -10, -10, 10, 10, 10])
-    parser.add_argument('--max_num_points', type=int, default=20000)
     parser.add_argument('--max_num_points_voxel', type=int, default=100)
-
-
+    parser.add_argument('--max_num_points', type=int, default=5000)
+    parser.add_argument('--eps', type=float, default=0)
 
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--num_epochs', type=int, default=20)
@@ -34,7 +33,7 @@ if __name__ == '__main__':
 
     torch.manual_seed(42)
 
-    dataset = SampleData(args.data_path, args.info_path)
+    dataset = SampleData(args.data_path, args.info_path, args.max_num_points, args.eps)
 
     loader = torch.utils.data.DataLoader(
         dataset=dataset,
