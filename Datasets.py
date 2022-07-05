@@ -73,6 +73,8 @@ class SampleData(Dataset):
         
         # print (idx, len(pcd))
         pts = torch.FloatTensor(pts)
+        R = torch.FloatTensor(R)
+        T = torch.FloatTensor(T)
 
         return pts, R, T
         

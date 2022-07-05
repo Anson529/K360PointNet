@@ -4,6 +4,7 @@ from Datasets import SampleData
 from Models import PointNet, PointPillar
 
 import argparse
+import numpy as np
 
 def getparser():
     parser = argparse.ArgumentParser()
@@ -46,14 +47,33 @@ if __name__ == '__main__':
     model = PointNet(args).to(args.device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    criterion = torch.nn.MSELoss()
+
+    Losses = []
 
     for epoch in range(0, args.num_epochs):
+
+        losses = []
 
         for idx, data in enumerate(loader):
             
             input = data[0].to(args.device).permute(0, 2, 1)
-            print (input.dtype)
+            output = data[2].to(args.device)
+            # print (input.dtype)
             ret = model(input)
-            print (ret.shape)
-            # print (ret[2].sum())
-            break
+            
+            loss = criterion(ret, data[2])
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            losses.append(loss.item())
+
+            Losses.append(np.mean(losses))
+
+            if idx % 10 == 0:
+                import matplotlib.pyplot as plt
+                plt.plot(Losses)
+                plt.savefig('curve.png')
+                plt.cla()

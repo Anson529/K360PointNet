@@ -17,7 +17,6 @@ class PointNet(nn.Module):
         self.linear = nn.Linear(1024, 3)
 
     def forward(self, x):
-        print (x.shape)
         x = self.net(x)
         x = self.linear(x[0])
 
