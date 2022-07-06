@@ -126,7 +126,7 @@ if __name__ == '__main__':
                 # if len(Losses) > 1 and Losses[-1] - Losses[-2] > 1:
                 #     print ('error message', output)
 
-                print (moving_loss, np.mean(center_losses))
+                print (Losses[-1], moving_loss, np.mean(center_losses))
                 
                 logs.append({'epoch': epoch, 'step': idx, 'loss_mean': Losses[-1]})
                 save_log(logs, args.work_dir)
