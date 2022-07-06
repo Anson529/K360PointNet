@@ -85,7 +85,11 @@ if __name__ == '__main__':
     for epoch in range(0, args.num_epochs):
 
         losses = []
+        center_losses = []
+        center = torch.zeros(args.batch_size, 3).to(args.device)
         model.train()
+
+        moving_loss = 0
 
         for idx, data in enumerate(train_loader):
             
@@ -96,6 +100,7 @@ if __name__ == '__main__':
             # print (output)
             
             loss = criterion(ret, output)
+            center_loss = criterion(center, output)
             loss.backward()
 
             steps += 1
@@ -105,6 +110,10 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
                 
             losses.append(loss.item())
+            center_losses.append(center_loss.item())
+
+            moving_loss = moving_loss * 0.95 + loss.item() * 0.05
+
             Losses.append(np.mean(losses))
             # print (Losses[-1])
 
@@ -116,9 +125,13 @@ if __name__ == '__main__':
 
                 # if len(Losses) > 1 and Losses[-1] - Losses[-2] > 1:
                 #     print ('error message', output)
+
+                print (moving_loss, np.mean(center_losses))
                 
                 logs.append({'epoch': epoch, 'step': idx, 'loss_mean': Losses[-1]})
                 save_log(logs, args.work_dir)
+
+                torch.save(model.state_dict(), f'{args.work_dir}/checkpoint_{epoch}.pth')
 
         val_Losses.append(evaluation(val_loader, model, args))
         logs.append({'epoch': epoch, 'val_loss': val_Losses[-1]})
