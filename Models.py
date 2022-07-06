@@ -14,7 +14,8 @@ class PointNet(nn.Module):
         self.opt = args
 
         self.net = PointNetfeat()
-        self.linear = nn.Linear(1024, 3)
+        self.linear = nn.Linear(1024, 4)
+        
 
     def forward(self, x):
         x = self.net(x)
