@@ -82,7 +82,7 @@ class SampleData(Dataset):
                 scales[i] = self.point_cloud_range[3 + i] / box_bound[3 + i]
 
         pts = torch.FloatTensor(pts * scales)
-        R = torch.FloatTensor(R)
+        R = torch.FloatTensor(R * scales)
         T = torch.FloatTensor(T * scales)
 
         return pts, R, T
