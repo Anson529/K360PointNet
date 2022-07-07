@@ -65,7 +65,7 @@ class SampleData(Dataset):
 
         # rescale the box to [-10, 10] ^ 3
         box_bound[3: ] -= box_center
-        scales = np.array([1, 1, 1])          
+        scales = np.array([1.0, 1.0, 1.0])          
         for i in range(3):
             if box_bound[3 + i] > 0:
                 scales[i] = self.point_cloud_range[3 + i] / box_bound[3 + i]
@@ -77,6 +77,8 @@ class SampleData(Dataset):
         R = torch.FloatTensor(R * scales)
         T = torch.FloatTensor(T * scales)
         out = torch.FloatTensor(out)
+
+        print (scales)
 
         # return pts, R, T, out
         return {"pts": pts, "output": out, "R": R, "T": T, "scales": scales, "trans": box_center, "pcd_path": sample_info['pcd_path']}

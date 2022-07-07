@@ -1,8 +1,15 @@
 import numpy as np
 import os
+import open3d as o3d
+
+def npy2pcd(path):
+    pts = np.load(path)[:, :3]
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pts)
+
+    return pcd
 
 def visualize_sample(pts, R, T, out, args):
-    import open3d as o3d
     pts, R, T, out = np.array(pts), np.array(R), np.array(T), np.array(out)
 
     bbox = o3d.geometry.TriangleMesh.create_box(20, 20, 20).translate((-10, -10, -10))
@@ -25,26 +32,23 @@ def visualize_sample(pts, R, T, out, args):
     o3d.visualization.draw_geometries([mesh, pcd, sphere, bbox_line])
 
 def goback(mesh, scales, trans):
-    import open3d as o3d
     points = np.array(mesh.vertices) / scales + trans
     mesh.vertices = o3d.utility.Vector3dVector(points)
 
 def test_sample(gt_sphere, sphere, scales, trans, pcd_path, args):
-    import open3d as o3d
     gt_sphere, sphere, scales, trans = np.array(gt_sphere), np.array(sphere), np.array(scales), np.array(trans)
 
     gt_mesh = o3d.geometry.TriangleMesh.create_sphere(radius=gt_sphere[-1]).translate((gt_sphere[:3]))
     mesh = o3d.geometry.TriangleMesh.create_sphere(radius=sphere[-1]).translate((sphere[:3]))
 
-    points = np.load(os.path.join(args.data_path, pcd_path))[:, :3]
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(points)
+    pcd = npy2pcd(os.path.join(args.data_path, pcd_path))
 
     goback(gt_mesh, scales, trans)
     goback(mesh, scales, trans)
 
-    o3d.visualization.draw_geometries([gt_mesh, pcd])
-    o3d.visualization.draw_geometries([mesh, pcd])
+    return gt_mesh, mesh
+    # o3d.visualization.draw_geometries([gt_mesh, pcd])
+    # o3d.visualization.draw_geometries([mesh, pcd])
     # gt_points = np.array(gt_mesh.vertices) / scales + trans
     # points = np.array(mesh.vertices) / scales + trans
 

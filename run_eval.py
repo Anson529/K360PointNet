@@ -6,4 +6,5 @@ os.system('python Evaluate.py \
     --eps 0.6 \
     --grad_cumulate 10 \
     --max_num_points 5000 \
-    --where_pretrained experiments\sphere\checkpoint_7.pth')
+    --where_pretrained experiments\sphere\checkpoint_7.pth \
+    --work_dir experiments/sphere')
