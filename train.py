@@ -11,27 +11,7 @@ import os
 import json
 import matplotlib.pyplot as plt
 
-def getparser():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('--data_path', type=str, default='E:\work\kitti360\code\processed/vegetation/trans')
-    parser.add_argument('--info_path', type=str, default='E:\work\kitti360\code\processed/vegetation/trans\info.pkl')
-
-    parser.add_argument('--voxel_size', type=list, default=[0.1, 0.1, 20])
-    parser.add_argument('--point_cloud_range', type=list, default=[-10, -10, -10, 10, 10, 10])
-    parser.add_argument('--max_num_points_voxel', type=int, default=100)
-    parser.add_argument('--max_num_points', type=int, default=5000)
-    parser.add_argument('--eps', type=float, default=0)
-
-    parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--num_epochs', type=int, default=20)
-    parser.add_argument('--grad_cumulate', type=int, default=1)
-    parser.add_argument('--lr', type=float, default=1e-3)
-
-    parser.add_argument('--device', type=str, default='cuda:0')
-    parser.add_argument('--work_dir', type=str, default='experiments/test')
-
-    return parser
+from Options import getparser
 
 def save_log(logs, work_dir):
     with open(f'{work_dir}/logs.json', 'w') as f:
@@ -86,19 +66,19 @@ if __name__ == '__main__':
 
         losses = []
         center_losses = []
-        center = torch.zeros(args.batch_size, 3).to(args.device)
+        center = torch.zeros(args.batch_size, 4).to(args.device)
+        center[:, 3] = 6
         model.train()
 
         moving_loss = 0
 
         for idx, data in enumerate(train_loader):
             
-            input = data[0].to(args.device).permute(0, 2, 1)
-            output = data[2].to(args.device)
+            input = data['input'].to(args.device).permute(0, 2, 1)
+            output = data['output'].to(args.device)
             # print (input.dtype)
             ret = model(input)
             # print (output)
-            
             loss = criterion(ret, output)
             center_loss = criterion(center, output)
             loss.backward()

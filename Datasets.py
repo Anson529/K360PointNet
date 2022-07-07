@@ -1,3 +1,4 @@
+from matplotlib import scale
 from matplotlib.pyplot import box
 import torch
 import torch.nn as nn
@@ -16,6 +17,8 @@ class SampleData(Dataset):
         self.eps = args.eps
         self.max_num_points = args.max_num_points
 
+        np.random.seed(42)
+
         with open(args.info_path, 'rb') as f:
             self.data_info = pickle.load(f)
 
@@ -29,28 +32,14 @@ class SampleData(Dataset):
         size = np.concatenate((size, size), axis=0)
         return bbox + conf * self.eps * size
 
-    def visualize(self, idx):
-        pts, R, T = self.__getitem__(idx)
-
-        import open3d as o3d
-
-        mesh = o3d.io.read_triangle_mesh(os.path.join(self.data_path, 'std.ply'))
-        points = np.array(mesh.vertices) @ R + T
-        mesh.vertices = o3d.utility.Vector3dVector(points)
-
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(pts)
-
-        FOR = o3d.geometry.TriangleMesh.create_coordinate_frame()
-
-        o3d.visualization.draw_geometries([pcd, FOR])
-        o3d.visualization.draw_geometries([mesh, pcd, FOR])
-
     def __getitem__(self, idx):
         sample_info = self.data_info[idx]
 
+        box_bound = sample_info['bbox']
+        radius = (box_bound[3:] - box_bound[:3]) / 2
+
         # enlarge the box & zero-center
-        box_bound = self.getbox(sample_info['bbox']) #+ [-1, -1, -1, 1, 1, 1]
+        box_bound = self.getbox(box_bound) #+ [-1, -1, -1, 1, 1, 1]
         box_center = (box_bound[:3] + box_bound[3:]) / 2
         
         # fetch the points form the point cloud
@@ -76,23 +65,25 @@ class SampleData(Dataset):
 
         # rescale the box to [-10, 10] ^ 3
         box_bound[3: ] -= box_center
-        scales = [1, 1, 1]          
+        scales = np.array([1, 1, 1])          
         for i in range(3):
             if box_bound[3 + i] > 0:
                 scales[i] = self.point_cloud_range[3 + i] / box_bound[3 + i]
 
+        radius = np.max(radius * scales)
+        out = np.concatenate((T * scales, [radius]), axis=0)
+
         pts = torch.FloatTensor(pts * scales)
         R = torch.FloatTensor(R * scales)
         T = torch.FloatTensor(T * scales)
+        out = torch.FloatTensor(out)
 
-        return pts, R, T
+        # return pts, R, T, out
+        return {"pts": pts, "output": out, "R": R, "T": T, "scales": scales, "trans": box_center, "pcd_path": sample_info['pcd_path']}
         
-from train import getparser
+from Options import getparser
 
 if __name__ == '__main__':
-    data_path = 'E:\work\kitti360\code\processed/vegetation\grid'
-    info_path = 'E:\work\kitti360\code\processed/vegetation\data/info.pkl'
-    
     parser = getparser()
     args = parser.parse_args()
 
@@ -100,4 +91,5 @@ if __name__ == '__main__':
     dataset = SampleData(args)
     
     for i in range(200):
-        dataset.visualize(5715)
+        pts, R, T, out = dataset[i]
+        # visualize_sample(pts, R, T, out)
