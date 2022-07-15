@@ -1,6 +1,25 @@
 import numpy as np
 import os
 import open3d as o3d
+from scipy.spatial.transform import Rotation as sc_R
+
+def decomposition(mat):
+    scales = np.array([np.linalg.norm(mat[:, 0]), np.linalg.norm(mat[:, 1]), np.linalg.norm(mat[:, 2])])
+    rot = (mat.T / scales).T
+    R = sc_R.from_matrix(rot)
+    angle = R.as_euler('xyz')[2]
+    
+    out = np.append(scales, angle)
+
+    return out
+
+def composition(out):
+    R = sc_R.from_euler('xyz', [0, 0, out[3]])
+    rot = R.as_matrix()
+
+    rot = (rot.T * out[:3]).T
+
+    return rot
 
 def npy2pcd(path):
     pts = np.load(path)[:, :3]
@@ -16,7 +35,7 @@ def visualize_sample(pts, R, T, out, args):
     bbox_line = o3d.geometry.LineSet.create_from_triangle_mesh(bbox)
 
     mesh = o3d.io.read_triangle_mesh(os.path.join(args.data_path, 'std.ply'))
-    points = np.array(mesh.vertices) @ R + T
+    points = np.array(mesh.vertices) @ R.T + T
     mesh.vertices = o3d.utility.Vector3dVector(points)
 
     pcd = o3d.geometry.PointCloud()
@@ -35,13 +54,31 @@ def goback(mesh, scales, trans):
     points = np.array(mesh.vertices) / scales + trans
     mesh.vertices = o3d.utility.Vector3dVector(points)
 
-def test_sample(gt_sphere, sphere, scales, trans, pcd_path, args):
+def trans_mesh(mesh, R, T):
+    points = np.array(mesh.vertices) @ R.T + T
+    mesh.vertices = o3d.utility.Vector3dVector(points)
+
+def test_sample_dec(gt_conf, conf, scales, trans, args):
+    gt_conf, conf, scales, trans = np.array(gt_conf), np.array(conf), np.array(scales), np.array(trans)
+
+    gt_mesh = o3d.io.read_triangle_mesh(os.path.join(args.data_path, 'std.ply'))
+    mesh = o3d.geometry.TriangleMesh(gt_mesh)
+
+    trans_mesh(gt_mesh, composition(gt_conf[:4]), gt_conf[4:])
+    trans_mesh(mesh, composition(conf[:4]), conf[4:])
+
+    goback(gt_mesh, scales, trans)
+    goback(mesh, scales, trans)
+
+    # o3d.visualization.draw_geometries([mesh])
+
+    return gt_mesh, mesh
+
+def test_sample(gt_sphere, sphere, scales, trans, args):
     gt_sphere, sphere, scales, trans = np.array(gt_sphere), np.array(sphere), np.array(scales), np.array(trans)
 
     gt_mesh = o3d.geometry.TriangleMesh.create_sphere(radius=gt_sphere[-1]).translate((gt_sphere[:3]))
     mesh = o3d.geometry.TriangleMesh.create_sphere(radius=sphere[-1]).translate((sphere[:3]))
-
-    pcd = npy2pcd(os.path.join(args.data_path, pcd_path))
 
     goback(gt_mesh, scales, trans)
     goback(mesh, scales, trans)

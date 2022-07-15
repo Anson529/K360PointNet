@@ -17,6 +17,8 @@ def getparser():
     parser.add_argument('--grad_cumulate', type=int, default=1)
     parser.add_argument('--lr', type=float, default=1e-3)
 
+    parser.add_argument('--out_dim', type=int, default=4)
+
     parser.add_argument('--device', type=str, default='cuda:0')
     parser.add_argument('--work_dir', type=str, default='experiments/test')
 

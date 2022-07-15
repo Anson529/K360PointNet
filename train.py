@@ -1,6 +1,6 @@
 import torch
 
-from Datasets import SampleData
+from Datasets import SampleData, Decompose
 from Models import PointNet, PointPillar
 from Evaluate import evaluation
 
@@ -29,7 +29,8 @@ if __name__ == '__main__':
 
     torch.manual_seed(42)
 
-    dataset = SampleData(args)
+    # dataset = SampleData(args)
+    dataset = Decompose(args)
 
     train_size = int(len(dataset) * 0.8)
 
@@ -74,13 +75,13 @@ if __name__ == '__main__':
 
         for idx, data in enumerate(train_loader):
             
-            input = data['input'].to(args.device).permute(0, 2, 1)
+            input = data['pts'].to(args.device).permute(0, 2, 1)
             output = data['output'].to(args.device)
             # print (input.dtype)
             ret = model(input)
             # print (output)
             loss = criterion(ret, output)
-            center_loss = criterion(center, output)
+
             loss.backward()
 
             steps += 1
@@ -90,7 +91,6 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
                 
             losses.append(loss.item())
-            center_losses.append(center_loss.item())
 
             moving_loss = moving_loss * 0.95 + loss.item() * 0.05
 
@@ -106,7 +106,7 @@ if __name__ == '__main__':
                 # if len(Losses) > 1 and Losses[-1] - Losses[-2] > 1:
                 #     print ('error message', output)
 
-                print (Losses[-1], moving_loss, np.mean(center_losses))
+                print (Losses[-1], moving_loss)
                 
                 logs.append({'epoch': epoch, 'step': idx, 'loss_mean': Losses[-1]})
                 save_log(logs, args.work_dir)

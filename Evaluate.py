@@ -77,7 +77,7 @@ def process(val_set, val_loader, model, args):
         ret = ret.detach().to('cpu')
         for i in range(args.batch_size):
             sample_path = data['pcd_path'][i][:-8]
-            ret = test_sample(data['output'][i], ret[i], data['scales'][i], data['trans'][i], data['pcd_path'][i], args)
+            ret = test_sample(data['output'][i], ret[i], data['scales'][i], data['trans'][i], args)
 
             if sample_path in cnt:
                 cnt[sample_path] += 1
@@ -128,7 +128,7 @@ if __name__ == '__main__':
         shuffle=False,
         #num_workers=8,
     )
-
-    process(dataset, loader, model, args)
+    visualize(dataset, loader, model, args)
+    # process(dataset, loader, model, args)
 
     print (model)

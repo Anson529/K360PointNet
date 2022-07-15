@@ -6,4 +6,5 @@ os.system('python train.py \
     --eps 0.6 \
     --grad_cumulate 10 \
     --max_num_points 5000 \
-    --work_dir experiments/sphere_2')
+    --out_dim 7 \
+    --work_dir experiments/transformation')
