@@ -1,5 +1,6 @@
 from matplotlib import scale
 from matplotlib.pyplot import box
+import scipy
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
@@ -7,8 +8,9 @@ from torch.utils.data import Dataset
 import pickle
 import os
 import numpy as np
+from scipy.spatial.transform import Rotation as sc_R
 
-from Geometry import decomposition, test_sample_dec, npy2pcd
+from Geometry import decomposition, test_sample_dec, npy2pcd, composition, trans_mesh
 
 class SampleData(Dataset):
 
@@ -115,7 +117,6 @@ class Decompose(SampleData):
 
         R = sample_info['R']
         T = sample_info['T'] - box_center
-
         pts = np.zeros((self.max_num_points, 3))
 
         # get a fix number of points
@@ -131,18 +132,25 @@ class Decompose(SampleData):
             if box_bound[3 + i] > 0:
                 scales[i] = self.point_cloud_range[3 + i] / box_bound[3 + i]
 
+        SCALE = scales.min()
+        scales = np.array([SCALE, SCALE, SCALE])
+
         radius = np.max(radius * scales)
         out = np.concatenate((decomposition(R * scales), T * scales), axis=0)
-
+        # print (T)
         pts = torch.FloatTensor(pts * scales)
         R = torch.FloatTensor(R * scales)
         T = torch.FloatTensor(T * scales)
         out = torch.FloatTensor(out)
 
-        print (out)
-        # quit()
+        # import open3d as o3d
+        # gt_mesh = o3d.io.read_triangle_mesh(os.path.join(args.data_path, 'std.ply'))
+        # trans_mesh(gt_mesh, sample_info['R'], sample_info['T'])
+        # mesh, _ = test_sample_dec(out, out, scales, box_center, args)
+        # print (mesh, gt_mesh)
+        
+        # o3d.visualization.draw_geometries([gt_mesh, mesh])
 
-        # return pts, R, T, out
         return {"pts": pts, "output": out, "R": R, "T": T, "scales": scales, "trans": box_center, "pcd_path": sample_info['pcd_path']}
         
 from Options import getparser
@@ -153,14 +161,16 @@ if __name__ == '__main__':
 
     torch.manual_seed(42)
     dataset = Decompose(args)
-    
+    print (args.eps)
     for i in range(200):
         ret = dataset[i]
-        gt_mesh, mesh = test_sample_dec(ret['output'], ret['output'], ret['scales'], ret['trans'], args)
+        print (ret)
+        quit()
+        # gt_mesh, mesh = test_sample_dec(ret['output'], ret['output'], ret['scales'], ret['trans'], args)
 
-        import open3d as o3d
-        pcd = npy2pcd(os.path.join(args.data_path, ret['pcd_path']))
+        # import open3d as o3d
+        # pcd = npy2pcd(os.path.join(args.data_path, ret['pcd_path']))
 
-        o3d.visualization.draw_geometries([pcd, gt_mesh])
+        # o3d.visualization.draw_geometries([gt_mesh])
         # quit()
         # visualize_sample(pts, R, T, out)

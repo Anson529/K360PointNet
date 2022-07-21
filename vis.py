@@ -15,11 +15,11 @@ def get_meshes(path):
     
     return meshes
 
-path = 'E:\work\kitti360\code/net\experiments\sphere/result'
+path = 'E:\work\kitti360\code/net\experiments/fixscale_2/result'
 data_path = 'E:\work\kitti360\code\processed/vegetation/trans'
 dirs = os.listdir(path)
 
-work_dir = 'E:\work\kitti360\code/net\experiments\sphere'
+work_dir = 'E:\work\kitti360\code/net\experiments/fixscale_2'
 
 mesh_dir = 'E:\work\kitti360\kitti360Scripts\kitti360scripts\custom/all_bboxes'
 

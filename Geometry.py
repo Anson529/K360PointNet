@@ -4,11 +4,11 @@ import open3d as o3d
 from scipy.spatial.transform import Rotation as sc_R
 
 def decomposition(mat):
-    scales = np.array([np.linalg.norm(mat[:, 0]), np.linalg.norm(mat[:, 1]), np.linalg.norm(mat[:, 2])])
-    rot = (mat.T / scales).T
+    scales = np.array([np.linalg.norm(mat.T[0]), np.linalg.norm(mat.T[1]), np.linalg.norm(mat.T[2])])
+    rot = mat / scales
+    
     R = sc_R.from_matrix(rot)
     angle = R.as_euler('xyz')[2]
-    
     out = np.append(scales, angle)
 
     return out
@@ -17,7 +17,7 @@ def composition(out):
     R = sc_R.from_euler('xyz', [0, 0, out[3]])
     rot = R.as_matrix()
 
-    rot = (rot.T * out[:3]).T
+    rot = rot * out[:3]
 
     return rot
 
@@ -58,17 +58,27 @@ def trans_mesh(mesh, R, T):
     points = np.array(mesh.vertices) @ R.T + T
     mesh.vertices = o3d.utility.Vector3dVector(points)
 
-def test_sample_dec(gt_conf, conf, scales, trans, args):
-    gt_conf, conf, scales, trans = np.array(gt_conf), np.array(conf), np.array(scales), np.array(trans)
+def test_sample_dec(a, b, c, d, args):
+    gt_conf, conf, scales, trans = np.array(a), np.array(b), np.array(c), np.array(d)
 
     gt_mesh = o3d.io.read_triangle_mesh(os.path.join(args.data_path, 'std.ply'))
+
+    # points = np.array(mesh.vertices) / scales
+    # mesh.vertices = o3d.utility.Vector3dVector(points)
+
     mesh = o3d.geometry.TriangleMesh(gt_mesh)
+    # print (conf.shape)
+    gt_conf[:3] /= scales
+    conf[:3] /= scales
+
+    gt_conf[4:] /= scales
+    conf[4:] /= scales
 
     trans_mesh(gt_mesh, composition(gt_conf[:4]), gt_conf[4:])
     trans_mesh(mesh, composition(conf[:4]), conf[4:])
 
-    goback(gt_mesh, scales, trans)
-    goback(mesh, scales, trans)
+    goback(gt_mesh, [1, 1, 1], trans)
+    goback(mesh, [1, 1, 1], trans)
 
     # o3d.visualization.draw_geometries([mesh])
 

@@ -7,4 +7,6 @@ os.system('python train.py \
     --grad_cumulate 10 \
     --max_num_points 5000 \
     --out_dim 7 \
-    --work_dir experiments/transformation')
+    --num_epochs 10 \
+    --type 1 \
+    --work_dir experiments/fixscale_2')

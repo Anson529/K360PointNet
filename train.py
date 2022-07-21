@@ -29,8 +29,10 @@ if __name__ == '__main__':
 
     torch.manual_seed(42)
 
-    # dataset = SampleData(args)
-    dataset = Decompose(args)
+    if args.type == 0:
+        dataset = SampleData(args)
+    elif args.type == 1:
+        dataset = Decompose(args)
 
     train_size = int(len(dataset) * 0.8)
 
@@ -53,6 +55,9 @@ if __name__ == '__main__':
     )
 
     model = PointNet(args).to(args.device)
+
+    # if args.pretrain:
+
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     criterion = torch.nn.MSELoss()
@@ -77,10 +82,14 @@ if __name__ == '__main__':
             
             input = data['pts'].to(args.device).permute(0, 2, 1)
             output = data['output'].to(args.device)
+
+            # input = torch.zeros_like(input).to(args.device)
             # print (input.dtype)
             ret = model(input)
             # print (output)
             loss = criterion(ret, output)
+            # print (output[0, -3:])
+            # quit()
 
             loss.backward()
 
@@ -107,8 +116,10 @@ if __name__ == '__main__':
                 #     print ('error message', output)
 
                 print (Losses[-1], moving_loss)
+                # print (ret[0])
+                # print (output[0])
                 
-                logs.append({'epoch': epoch, 'step': idx, 'loss_mean': Losses[-1]})
+                logs.append({'epoch': epoch, 'step': idx, 'loss_mean': Losses[-1], 'moving_ave': moving_loss})
                 save_log(logs, args.work_dir)
 
                 torch.save(model.state_dict(), f'{args.work_dir}/checkpoint_{epoch}.pth')

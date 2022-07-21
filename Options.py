@@ -12,6 +12,8 @@ def getparser():
     parser.add_argument('--max_num_points', type=int, default=5000)
     parser.add_argument('--eps', type=float, default=0)
 
+    parser.add_argument('--type', type=int, default=0)
+
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--num_epochs', type=int, default=20)
     parser.add_argument('--grad_cumulate', type=int, default=1)
@@ -22,6 +24,7 @@ def getparser():
     parser.add_argument('--device', type=str, default='cuda:0')
     parser.add_argument('--work_dir', type=str, default='experiments/test')
 
+    parser.add_argument('--pretrain', type=bool, default='False')
     parser.add_argument('--where_pretrained', type=str, default='experiments/test/checkpoint.pth')
 
     return parser
