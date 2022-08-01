@@ -75,13 +75,23 @@ if __name__ == '__main__':
         center = torch.zeros(args.batch_size, 4).to(args.device)
         center[:, 3] = 6
         model.train()
+        
 
         moving_loss = 0
+        moving_loss_1, moving_loss_2, moving_loss_3 = 0, 0, 0
+
+        ori_Min, ori_Max = 10, -10
 
         for idx, data in enumerate(train_loader):
             
             input = data['pts'].to(args.device).permute(0, 2, 1)
             output = data['output'].to(args.device)
+
+            # for i in range(2):
+            #     ori_Min = min(ori_Min, output[i][3])
+            #     ori_Max = max(ori_Max, output[i][3])
+            
+            # print (ori_Min, ori_Max)
 
             # input = torch.zeros_like(input).to(args.device)
             # print (input.dtype)
@@ -90,6 +100,9 @@ if __name__ == '__main__':
             loss = criterion(ret, output)
             # print (output[0, -3:])
             # quit()
+            loss_1 = criterion(ret[:, :3], output[:, :3])
+            loss_2 = criterion(ret[:, 4], output[:, 4])
+            loss_3 = criterion(ret[:, 4:], output[:, 4:])
 
             loss.backward()
 
@@ -102,6 +115,9 @@ if __name__ == '__main__':
             losses.append(loss.item())
 
             moving_loss = moving_loss * 0.95 + loss.item() * 0.05
+            moving_loss_1 = moving_loss_1 * 0.95 + loss_1.item() * 0.05
+            moving_loss_2 = moving_loss_2 * 0.95 + loss_2.item() * 0.05
+            moving_loss_3 = moving_loss_3 * 0.95 + loss_3.item() * 0.05
 
             Losses.append(np.mean(losses))
             # print (Losses[-1])
@@ -115,7 +131,8 @@ if __name__ == '__main__':
                 # if len(Losses) > 1 and Losses[-1] - Losses[-2] > 1:
                 #     print ('error message', output)
 
-                print (Losses[-1], moving_loss)
+                # print (Losses[-1], moving_loss)
+                print (moving_loss_1, moving_loss_2, moving_loss_3)
                 # print (ret[0])
                 # print (output[0])
                 

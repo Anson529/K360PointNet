@@ -60,6 +60,51 @@ def visualize(val_set, val_loader, model, args):
 
     return np.mean(losses)
 
+def calcIoU(val_set, val_loader, model, args):
+    import open3d as o3d
+
+    # model.eval()
+    print ('processing')
+    criterion = torch.nn.MSELoss()
+
+    losses = []
+
+    results = []
+    cnt = {}
+
+    IoUs = []
+
+    for idx, data in enumerate(val_loader):
+            
+        input = data['pts'].to(args.device).permute(0, 2, 1)
+        input = torch.zeros_like(input).to(args.device)
+        output = data['output'].to(args.device)
+        ret = model(input)
+
+        loss = criterion(ret, output)
+        losses.append(loss.item())
+
+        ret = ret.detach().to('cpu')
+        for i in range(args.batch_size):
+            sample_path = data['pcd_path'][i][:-8]
+            mesh = test_sample_dec(data['output'][i], ret[i], data['scales'][i], data['trans'][i], args)
+
+            o3d.io.write_triangle_mesh("clibs/std.ply", mesh[0])
+            o3d.io.write_triangle_mesh("clibs/predicted.ply", mesh[1])
+            
+            os.system("cd clibs && 3dIoU")
+
+            with open("clibs/IoU.out", "r") as f:
+                IoU = float(f.readline())
+            
+            IoUs.append(IoU)
+            # results.append(ret)
+        
+        print (np.mean(IoUs))
+    # with open(f'{args.work_dir}/result.pkl,)
+
+    return np.mean(losses)
+
 def process(val_set, val_loader, model, args):
     import open3d as o3d
 
@@ -90,6 +135,8 @@ def process(val_set, val_loader, model, args):
         ret = ret.detach().to('cpu')
         for i in range(args.batch_size):
             sample_path = data['pcd_path'][i][:-8]
+            # ret[i, 3] = torch.arcsin(ret[i, 3])
+            # print (ret[i, 3], sample_path)
             mesh = test_sample_dec(data['output'][i], ret[i], data['scales'][i], data['trans'][i], args)
 
             if sample_path in cnt:
@@ -146,6 +193,7 @@ if __name__ == '__main__':
     )
     # visualize(dataset, loader, model, args)
     # evaluation(val_loader, model, args)
-    process(dataset, loader, model, args)
+    # process(dataset, loader, model, args)
+    calcIoU(val_loader, loader, model, args)
 
     print (model)

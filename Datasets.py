@@ -132,11 +132,17 @@ class Decompose(SampleData):
             if box_bound[3 + i] > 0:
                 scales[i] = self.point_cloud_range[3 + i] / box_bound[3 + i]
 
-        SCALE = scales.min()
-        scales = np.array([SCALE, SCALE, SCALE])
+        # SCALE = scales.min()
+        # scales = np.array([SCALE, SCALE, SCALE])
 
-        radius = np.max(radius * scales)
+        # radius = np.max(radius * scales)
         out = np.concatenate((decomposition(R * scales), T * scales), axis=0)
+
+        # if out[3] < 0:
+        #     out[3] += 2 * np.pi
+
+        # out[3] = np.cos(out[3])
+
         # print (T)
         pts = torch.FloatTensor(pts * scales)
         R = torch.FloatTensor(R * scales)
