@@ -10,6 +10,8 @@ import numpy as np
 import os
 import pickle
 
+from tqdm import tqdm
+
 def evaluation(val_loader, model, args):
     # model.eval()
     print ('evaluating')
@@ -64,7 +66,7 @@ def calcIoU(val_set, val_loader, model, args):
     import open3d as o3d
 
     # model.eval()
-    print ('processing')
+    print ('calculating 3d IoU')
     criterion = torch.nn.MSELoss()
 
     losses = []
@@ -74,7 +76,11 @@ def calcIoU(val_set, val_loader, model, args):
 
     IoUs = []
 
+    print ('total:', len(val_loader))
+
     for idx, data in enumerate(val_loader):
+        if idx % 10 == 0:
+            print (idx)
             
         input = data['pts'].to(args.device).permute(0, 2, 1)
         input = torch.zeros_like(input).to(args.device)
@@ -86,24 +92,29 @@ def calcIoU(val_set, val_loader, model, args):
 
         ret = ret.detach().to('cpu')
         for i in range(args.batch_size):
+            # ret[i, 3] = torch.arcsin(ret[i, 3])
             sample_path = data['pcd_path'][i][:-8]
             mesh = test_sample_dec(data['output'][i], ret[i], data['scales'][i], data['trans'][i], args)
 
             o3d.io.write_triangle_mesh("clibs/std.ply", mesh[0])
             o3d.io.write_triangle_mesh("clibs/predicted.ply", mesh[1])
             
-            os.system("cd clibs && 3dIoU")
-
-            with open("clibs/IoU.out", "r") as f:
-                IoU = float(f.readline())
+            try:
+                os.system("cd clibs && 3dIoU")
+                with open("clibs/IoU.out", "r") as f:
+                    IoU = float(f.readline())
             
-            IoUs.append(IoU)
+                IoUs.append(IoU)
+            except:
+                pass
             # results.append(ret)
-        
         print (np.mean(IoUs))
+
+        if idx == 1000:
+            break
     # with open(f'{args.work_dir}/result.pkl,)
 
-    return np.mean(losses)
+    return np.mean(IoUs)
 
 def process(val_set, val_loader, model, args):
     import open3d as o3d
@@ -122,7 +133,7 @@ def process(val_set, val_loader, model, args):
         input = data['pts'].to(args.device).permute(0, 2, 1)
         
         output = data['output'].to(args.device)
-        # input = torch.zeros_like(input).to(args.device)
+        input = torch.zeros_like(input).to(args.device)
         # print (input.dtype)
         ret = model(input)
 
@@ -136,7 +147,7 @@ def process(val_set, val_loader, model, args):
         for i in range(args.batch_size):
             sample_path = data['pcd_path'][i][:-8]
             # ret[i, 3] = torch.arcsin(ret[i, 3])
-            # print (ret[i, 3], sample_path)
+            print (ret[i, 3], sample_path)
             mesh = test_sample_dec(data['output'][i], ret[i], data['scales'][i], data['trans'][i], args)
 
             if sample_path in cnt:
@@ -184,6 +195,14 @@ if __name__ == '__main__':
         #num_workers=8,
     )
 
+    train_loader = torch.utils.data.DataLoader(
+        dataset=train_set,
+        batch_size=args.batch_size,
+        drop_last=True,
+        shuffle=True,
+        #num_workers=8,
+    )
+
     val_loader = torch.utils.data.DataLoader(
         dataset=val_set,
         batch_size=args.batch_size,
@@ -194,6 +213,9 @@ if __name__ == '__main__':
     # visualize(dataset, loader, model, args)
     # evaluation(val_loader, model, args)
     # process(dataset, loader, model, args)
-    calcIoU(val_loader, loader, model, args)
+    IoU = calcIoU(train_loader, val_loader, model, args)
+
+    with open(f'{args.work_dir}/IoU.txt', 'w') as f:
+        print (IoU, file=f)
 
     print (model)

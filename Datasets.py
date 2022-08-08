@@ -132,30 +132,27 @@ class Decompose(SampleData):
             if box_bound[3 + i] > 0:
                 scales[i] = self.point_cloud_range[3 + i] / box_bound[3 + i]
 
-        # SCALE = scales.min()
-        # scales = np.array([SCALE, SCALE, SCALE])
+        SCALE = scales.min()
+        scales = np.array([SCALE, SCALE, SCALE])
 
         # radius = np.max(radius * scales)
         out = np.concatenate((decomposition(R * scales), T * scales), axis=0)
 
+        # if out[0] < out[1]:
+        #     out[0], out[1] = out[1], out[0]
+        #     out[3] += np.pi / 2
+
         # if out[3] < 0:
         #     out[3] += 2 * np.pi
-
-        # out[3] = np.cos(out[3])
+        
+        # while out[3] > 0.5 * np.pi:
+        #     out[3] -= np.pi
 
         # print (T)
         pts = torch.FloatTensor(pts * scales)
         R = torch.FloatTensor(R * scales)
         T = torch.FloatTensor(T * scales)
         out = torch.FloatTensor(out)
-
-        # import open3d as o3d
-        # gt_mesh = o3d.io.read_triangle_mesh(os.path.join(args.data_path, 'std.ply'))
-        # trans_mesh(gt_mesh, sample_info['R'], sample_info['T'])
-        # mesh, _ = test_sample_dec(out, out, scales, box_center, args)
-        # print (mesh, gt_mesh)
-        
-        # o3d.visualization.draw_geometries([gt_mesh, mesh])
 
         return {"pts": pts, "output": out, "R": R, "T": T, "scales": scales, "trans": box_center, "pcd_path": sample_info['pcd_path']}
         

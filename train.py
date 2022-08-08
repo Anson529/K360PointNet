@@ -1,7 +1,7 @@
 import torch
 
 from Datasets import SampleData, Decompose
-from Models import PointNet, PointPillar
+from Models import PointNet, PointPillar, PointNetV2
 from Evaluate import evaluation
 
 import argparse
@@ -54,8 +54,8 @@ if __name__ == '__main__':
         #num_workers=8,
     )
 
-    model = PointNet(args).to(args.device)
-
+    # model = PointNet(args).to(args.device)
+    model = PointNetV2(args).to(args.device)
     # if args.pretrain:
 
 
@@ -87,22 +87,14 @@ if __name__ == '__main__':
             input = data['pts'].to(args.device).permute(0, 2, 1)
             output = data['output'].to(args.device)
 
-            # for i in range(2):
-            #     ori_Min = min(ori_Min, output[i][3])
-            #     ori_Max = max(ori_Max, output[i][3])
-            
-            # print (ori_Min, ori_Max)
-
             # input = torch.zeros_like(input).to(args.device)
             # print (input.dtype)
-            ret = model(input)
-            # print (output)
-            loss = criterion(ret, output)
-            # print (output[0, -3:])
-            # quit()
-            loss_1 = criterion(ret[:, :3], output[:, :3])
-            loss_2 = criterion(ret[:, 4], output[:, 4])
-            loss_3 = criterion(ret[:, 4:], output[:, 4:])
+            # ret = model(input)
+
+
+            ret = model.step(input, output)[0]
+
+            loss = ret[0] - ret[1] * 10 + ret[2]
 
             loss.backward()
 
@@ -114,10 +106,10 @@ if __name__ == '__main__':
                 
             losses.append(loss.item())
 
-            moving_loss = moving_loss * 0.95 + loss.item() * 0.05
-            moving_loss_1 = moving_loss_1 * 0.95 + loss_1.item() * 0.05
-            moving_loss_2 = moving_loss_2 * 0.95 + loss_2.item() * 0.05
-            moving_loss_3 = moving_loss_3 * 0.95 + loss_3.item() * 0.05
+            moving_loss = moving_loss * 0.98 + loss.item() * 0.02
+            moving_loss_1 = moving_loss_1 * 0.98 + ret[0].item() * 0.02
+            moving_loss_2 = moving_loss_2 * 0.98 - ret[1].item() * 0.02 * 10
+            moving_loss_3 = moving_loss_3 * 0.98 + ret[2].item() * 0.02
 
             Losses.append(np.mean(losses))
             # print (Losses[-1])
@@ -127,6 +119,7 @@ if __name__ == '__main__':
                 plt.plot(Losses)
                 plt.savefig(f'{args.work_dir}/train_curve.png')
                 plt.cla()
+                
 
                 # if len(Losses) > 1 and Losses[-1] - Losses[-2] > 1:
                 #     print ('error message', output)
@@ -136,7 +129,8 @@ if __name__ == '__main__':
                 # print (ret[0])
                 # print (output[0])
                 
-                logs.append({'epoch': epoch, 'step': idx, 'loss_mean': Losses[-1], 'moving_ave': moving_loss})
+                logs.append({'epoch': epoch, 'step': idx, 'loss_mean': Losses[-1], 'moving_ave': moving_loss, 'L1': moving_loss_1, \
+                    'L2': moving_loss_2, 'L3': moving_loss_3})
                 save_log(logs, args.work_dir)
 
                 torch.save(model.state_dict(), f'{args.work_dir}/checkpoint_{epoch}.pth')

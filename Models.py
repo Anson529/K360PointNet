@@ -6,6 +6,11 @@ import numpy as np
 from torchvision.models import resnet18
 from pointnet.model import PointNetfeat
 
+
+def radian2vec(x):
+    a, b = torch.sin(x), torch.cos(x)
+    return torch.concat((a, b), dim=1)
+
 class PointNet(nn.Module):
     def __init__(self, args):
 
@@ -22,6 +27,41 @@ class PointNet(nn.Module):
         x = self.linear(x[0])
 
         return x
+
+class PointNetV2(nn.Module):
+
+    def __init__(self, args):
+
+        super(PointNetV2, self).__init__()
+
+        self.opt = args
+        self.criterion = nn.MSELoss()
+
+        self.net = PointNetfeat()
+        
+        self.scaleNet = nn.Linear(1024, 3)
+        self.rotNet = nn.Linear(1024, 2)
+        self.locNet = nn.Linear(1024, 3)
+        
+
+    def forward(self, x):
+        x = self.net(x)
+
+        scale = self.scaleNet(x[0])
+        rot = self.rotNet(x[0])
+        loc = self.locNet(x[0])
+
+        return scale, rot, loc
+
+    def step(self, x, output):
+        scale, rot, loc = self.forward(x)
+
+        L1 = self.criterion(scale, output[:, :3])
+        L2 = torch.cosine_similarity(rot, radian2vec(output[:, 3: 4])).mean()
+        L3 = self.criterion(loc, output[:, 4:])
+
+
+        return (L1, L2, L3), (scale, rot, loc)
     
 
 class PointPillar(nn.Module):
