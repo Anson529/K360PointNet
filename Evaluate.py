@@ -18,6 +18,7 @@ def evaluation(val_loader, model, args):
     criterion = torch.nn.MSELoss()
 
     losses = []
+    L1, L2, L3 = [], [], []
 
     for idx, data in enumerate(val_loader):
             
@@ -26,16 +27,19 @@ def evaluation(val_loader, model, args):
 
         # input = torch.zeros_like(input).to(args.device)
         # print (input.dtype)
-        ret = model(input)
-        # print (ret[0])
-        # quit()
+        # ret = model(input)
 
-        loss = criterion(ret, output)
+        ret = model.step(input, output)[0]
+
+        loss = ret[0] * args.w[0] - ret[1] * args.w[1] + ret[2] * args.w[2]
         losses.append(loss.item())
+        L1.append(ret[0].item())
+        L2.append(ret[1].item())
+        L3.append(ret[2].item())
 
         print (np.mean(losses))
 
-    return np.mean(losses)
+    return np.mean(losses), np.mean(L1), np.mean(L2), np.mean(L3)
 
 def visualize(val_set, val_loader, model, args):
     model.eval()

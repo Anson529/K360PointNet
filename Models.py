@@ -8,7 +8,7 @@ from pointnet.model import PointNetfeat
 
 
 def radian2vec(x):
-    a, b = torch.sin(x), torch.cos(x)
+    a, b = torch.cos(x), torch.sin(x)
     return torch.concat((a, b), dim=1)
 
 class PointNet(nn.Module):

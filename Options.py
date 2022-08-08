@@ -18,6 +18,7 @@ def getparser():
     parser.add_argument('--num_epochs', type=int, default=20)
     parser.add_argument('--grad_cumulate', type=int, default=1)
     parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--w', type=list, default=[1, 10, 1])
 
     parser.add_argument('--out_dim', type=int, default=4)
 

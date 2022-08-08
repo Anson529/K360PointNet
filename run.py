@@ -9,4 +9,4 @@ os.system('python train.py \
     --out_dim 7 \
     --num_epochs 10 \
     --type 1 \
-    --work_dir experiments_new/fixscale')
+    --work_dir experiments_new/fixscale_sym')

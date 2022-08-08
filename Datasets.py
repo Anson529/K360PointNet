@@ -138,15 +138,15 @@ class Decompose(SampleData):
         # radius = np.max(radius * scales)
         out = np.concatenate((decomposition(R * scales), T * scales), axis=0)
 
-        # if out[0] < out[1]:
-        #     out[0], out[1] = out[1], out[0]
-        #     out[3] += np.pi / 2
+        if out[0] < out[1]:
+            out[0], out[1] = out[1], out[0]
+            out[3] += np.pi / 2
 
         # if out[3] < 0:
         #     out[3] += 2 * np.pi
         
-        # while out[3] > 0.5 * np.pi:
-        #     out[3] -= np.pi
+        while out[3] > 0.5 * np.pi:
+            out[3] -= np.pi
 
         # print (T)
         pts = torch.FloatTensor(pts * scales)

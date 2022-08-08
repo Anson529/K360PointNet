@@ -11,6 +11,8 @@ import os
 import json
 import matplotlib.pyplot as plt
 
+from torch.utils.tensorboard import SummaryWriter
+
 from Options import getparser
 
 def save_log(logs, work_dir):
@@ -22,12 +24,15 @@ def save_log(logs, work_dir):
 
 if __name__ == '__main__':
 
+
     parser = getparser()
     args = parser.parse_args()
 
     os.makedirs(args.work_dir, exist_ok=True)
 
     torch.manual_seed(42)
+
+    writer = SummaryWriter(f'{args.work_dir}/tensorboard')
 
     if args.type == 0:
         dataset = SampleData(args)
@@ -94,7 +99,7 @@ if __name__ == '__main__':
 
             ret = model.step(input, output)[0]
 
-            loss = ret[0] - ret[1] * 10 + ret[2]
+            loss = ret[0] * args.w[0] - ret[1] * args.w[1] + ret[2] * args.w[2]
 
             loss.backward()
 
@@ -107,41 +112,41 @@ if __name__ == '__main__':
             losses.append(loss.item())
 
             moving_loss = moving_loss * 0.98 + loss.item() * 0.02
-            moving_loss_1 = moving_loss_1 * 0.98 + ret[0].item() * 0.02
-            moving_loss_2 = moving_loss_2 * 0.98 - ret[1].item() * 0.02 * 10
-            moving_loss_3 = moving_loss_3 * 0.98 + ret[2].item() * 0.02
 
             Losses.append(np.mean(losses))
             # print (Losses[-1])
+            writer.add_scalar('train_loss', loss.item(), global_step=steps)
+            writer.add_scalar('scale_loss', ret[0].item(), global_step=steps)
+            writer.add_scalar('rot_similarity', ret[1].item(), global_step=steps)
+            writer.add_scalar('loc_loss', ret[2].item(), global_step=steps)
 
             if idx % 10 == 0:
                 
                 plt.plot(Losses)
                 plt.savefig(f'{args.work_dir}/train_curve.png')
                 plt.cla()
-                
 
-                # if len(Losses) > 1 and Losses[-1] - Losses[-2] > 1:
-                #     print ('error message', output)
-
-                # print (Losses[-1], moving_loss)
-                print (moving_loss_1, moving_loss_2, moving_loss_3)
-                # print (ret[0])
-                # print (output[0])
+                print (steps, moving_loss)
                 
-                logs.append({'epoch': epoch, 'step': idx, 'loss_mean': Losses[-1], 'moving_ave': moving_loss, 'L1': moving_loss_1, \
-                    'L2': moving_loss_2, 'L3': moving_loss_3})
+                logs.append({'epoch': epoch, 'step': idx, 'loss_mean': Losses[-1], 'moving_ave': moving_loss})
                 save_log(logs, args.work_dir)
 
                 torch.save(model.state_dict(), f'{args.work_dir}/checkpoint_{epoch}.pth')
 
-        val_Losses.append(evaluation(val_loader, model, args))
-        logs.append({'epoch': epoch, 'val_loss': val_Losses[-1]})
+        val_loss, L1, L2, L3 = evaluation(val_loader, model, args)
+        logs.append({'epoch': epoch, 'val_loss': val_loss})
         save_log(logs, args.work_dir)
 
+        writer.add_scalar('val_loss', val_loss, global_step=epoch)
+        writer.add_scalar('val_scale_loss', L1, global_step=epoch)
+        writer.add_scalar('val_rot_similarity', L2, global_step=epoch)
+        writer.add_scalar('val_loc_loss', L3, global_step=epoch)
+
+        val_Losses.append(val_loss)
         plt.plot(val_Losses)
         plt.savefig(f'{args.work_dir}/val_curve.png')
         plt.cla()
+        print ('233', epoch)
     
     # result = {'train': Losses, 'val': val_Losses}
 
