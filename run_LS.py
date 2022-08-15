@@ -9,4 +9,5 @@ os.system('python train_LS.py \
     --out_dim 7 \
     --num_epochs 40 \
     --type 1 \
+    --voxel_size 5 5 5 \
     --work_dir experiments_LS/fixscale_size5')
