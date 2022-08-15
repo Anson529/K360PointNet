@@ -1,8 +1,8 @@
 import torch
 
 from Datasets import Decompose, SampleData
-from Models import PointNet, PointPillar
-from Geometry import test_sample_dec, visualize_sample, test_sample
+from Models import PointNet, PointPillar, PointNetV2
+from Geometry import test_sample_dec, vis_sample, visualize_sample, test_sample
 
 import argparse
 import numpy as np
@@ -42,25 +42,42 @@ def evaluation(val_loader, model, args):
     return np.mean(losses), np.mean(L1), np.mean(L2), np.mean(L3)
 
 def visualize(val_set, val_loader, model, args):
-    model.eval()
+    # model.eval()
     print ('visualizing')
     criterion = torch.nn.MSELoss()
 
     losses = []
+    cnt = {}
+
+    import open3d as o3d
 
     for idx, data in enumerate(val_loader):
             
         input = data['pts'].to(args.device).permute(0, 2, 1)
         output = data['output'].to(args.device)
-        # print (input.dtype)
-        ret = model(input)
+        loss, ret = model.step(input, output)
 
         loss = criterion(ret, output)
         losses.append(loss.item())
 
         ret = ret.detach().to('cpu')
         for i in range(args.batch_size):
-            visualize_sample(data['pts'][i], data['R'][i], data['T'][i], ret[i], args)
+            sample_path = data['pcd_path'][i][:-8]
+            print (sample_path)
+            pcd, gt_mesh, mesh, bbox_line = vis_sample(data['pts'][i], data['output'][i], ret[i], args)
+            # visualize_sample(data['pts'][i], data['R'][i], data['T'][i], ret[i], args)
+
+            if sample_path in cnt:
+                cnt[sample_path] += 1
+            else:
+                cnt[sample_path] = 0
+
+            os.makedirs(f'{args.work_dir}/origin/{sample_path}/{cnt[sample_path]}', exist_ok=True)
+            
+            o3d.io.write_point_cloud(f'{args.work_dir}/origin/{sample_path}/{cnt[sample_path]}/pcd.ply', pcd)
+            o3d.io.write_triangle_mesh(f'{args.work_dir}/origin/{sample_path}/{cnt[sample_path]}/gt.ply', gt_mesh)
+            o3d.io.write_triangle_mesh(f'{args.work_dir}/origin/{sample_path}/{cnt[sample_path]}/pre.ply', mesh)
+            o3d.io.write_line_set(f'{args.work_dir}/origin/{sample_path}/{cnt[sample_path]}/box.ply', bbox_line)
         
         
 
@@ -87,11 +104,12 @@ def calcIoU(val_set, val_loader, model, args):
             print (idx)
             
         input = data['pts'].to(args.device).permute(0, 2, 1)
-        input = torch.zeros_like(input).to(args.device)
+        # input = torch.zeros_like(input).to(args.device)
         output = data['output'].to(args.device)
-        ret = model(input)
+        loss, ret = model.step(input, output)
 
-        loss = criterion(ret, output)
+        loss = loss[0] * args.w[0] - loss[1] * args.w[1] + loss[2] * args.w[2]
+
         losses.append(loss.item())
 
         ret = ret.detach().to('cpu')
@@ -137,15 +155,18 @@ def process(val_set, val_loader, model, args):
         input = data['pts'].to(args.device).permute(0, 2, 1)
         
         output = data['output'].to(args.device)
-        input = torch.zeros_like(input).to(args.device)
+        # input = torch.zeros_like(input).to(args.device)
         # print (input.dtype)
-        ret = model(input)
+        # ret = model(input)
 
-        loss = criterion(ret, output)
+        # loss = criterion(ret, output)
+        # 
+
+        loss, ret = model.step(input, output)
+
+        loss = loss[0] * args.w[0] - loss[1] * args.w[1] + loss[2] * args.w[2]
+
         losses.append(loss.item())
-        # print (ret[0])
-        # print (ret[1])
-        # quit()
 
         ret = ret.detach().to('cpu')
         for i in range(args.batch_size):
@@ -161,7 +182,7 @@ def process(val_set, val_loader, model, args):
 
             os.makedirs(f'{args.work_dir}/result/{sample_path}/gt', exist_ok=True)
             os.makedirs(f'{args.work_dir}/result/{sample_path}/pre', exist_ok=True)
-
+            
             o3d.io.write_triangle_mesh(f'{args.work_dir}/result/{sample_path}/gt/{cnt[sample_path]}.ply', mesh[0])
             o3d.io.write_triangle_mesh(f'{args.work_dir}/result/{sample_path}/pre/{cnt[sample_path]}.ply', mesh[1])
             # results.append(ret)
@@ -177,7 +198,7 @@ if __name__ == '__main__':
     parser = getparser()
     args = parser.parse_args()
 
-    model = PointNet(args).to(args.device)
+    model = PointNetV2(args).to(args.device)
     model.load_state_dict(torch.load(args.where_pretrained))
 
     torch.manual_seed(42)
@@ -214,12 +235,12 @@ if __name__ == '__main__':
         shuffle=True,
         #num_workers=8,
     )
-    # visualize(dataset, loader, model, args)
+    visualize(dataset, loader, model, args)
     # evaluation(val_loader, model, args)
     # process(dataset, loader, model, args)
-    IoU = calcIoU(train_loader, val_loader, model, args)
+    # IoU = calcIoU(train_loader, val_loader, model, args)
 
-    with open(f'{args.work_dir}/IoU.txt', 'w') as f:
-        print (IoU, file=f)
+    # with open(f'{args.work_dir}/IoU.txt', 'w') as f:
+    #     print (IoU, file=f)
 
     print (model)

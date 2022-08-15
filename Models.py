@@ -11,6 +11,9 @@ def radian2vec(x):
     a, b = torch.cos(x), torch.sin(x)
     return torch.concat((a, b), dim=1)
 
+def vec2radian(x):
+    return torch.atan2(x[:, 1:], x[:, :1])
+
 class PointNet(nn.Module):
     def __init__(self, args):
 
@@ -60,8 +63,12 @@ class PointNetV2(nn.Module):
         L2 = torch.cosine_similarity(rot, radian2vec(output[:, 3: 4])).mean()
         L3 = self.criterion(loc, output[:, 4:])
 
+        # print (rot)
+        # print (L2)
+        rot = vec2radian(rot)
+        ret = torch.concat((scale, rot, loc), dim=1)
 
-        return (L1, L2, L3), (scale, rot, loc)
+        return (L1, L2, L3), ret
     
 
 class PointPillar(nn.Module):
@@ -76,11 +83,49 @@ class PointPillar(nn.Module):
         self.net = resnet18()
 
     def forward(self, pcd):
-        print (pcd.shape)
         voxels = self.voxel_gen.generate(np.array(pcd[0]))
 
         return voxels
         
+class ManualFeature():
+
+    def __init__(self, args):
+        
+        super(ManualFeature, self).__init__()
+
+        pcd_range = np.array(args.point_cloud_range)
+        self.max_dis = 15
+
+        self.grid_size = (pcd_range[3:] - pcd_range[:3]) // args.voxel_size + 1
+
+        self.locs = torch.zeros(tuple(self.grid_size) + (3,))
+        
+        low_bound = torch.FloatTensor(pcd_range[:3])
+        voxel_size = torch.FloatTensor(args.voxel_size)
+
+        for a in range(self.grid_size[0]):
+            for b in range(self.grid_size[1]):
+                for c in range(self.grid_size[2]):
+                    displacement = torch.FloatTensor([a, b, c]) * voxel_size
+                    self.locs[a, b, c] = low_bound +  displacement
+
+        self.locs = self.locs.reshape(-1, 3)
+
+    def extract(self, pcd):
+        N = pcd.size(1)
+        self.locs = self.locs.to(pcd.device)
+        dis = torch.zeros(self.locs.size(0), pcd.size(0), pcd.size(1)).to(pcd.device)
+        feature = torch.zeros(self.max_dis, self.locs.size(0), pcd.size(0)).to(pcd.device)
+        Mx = torch.zeros(2, 2).to(pcd.device)
+        for i in range(self.locs.size(0)):
+            dis[i] = ((pcd - self.locs[i]) ** 2).sum(dim=-1).sqrt().ceil()
+
+        for i in range(self.max_dis):
+            feature[i] = (dis <= (i + 1)).sum(dim=-1)
+        feature = feature.permute(2, 1, 0)
+
+        return feature
+
 
 class VoxelGenerator(object):
     """Voxel generator in numpy implementation.

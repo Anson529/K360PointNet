@@ -58,6 +58,34 @@ def trans_mesh(mesh, R, T):
     points = np.array(mesh.vertices) @ R.T + T
     mesh.vertices = o3d.utility.Vector3dVector(points)
 
+def vis_sample(pts, a, b, args):
+    pts, gt_conf, conf = np.array(pts), np.array(a), np.array(b)
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pts)
+
+    FOR = o3d.geometry.TriangleMesh.create_coordinate_frame(origin=gt_conf[4:])
+    bbox = o3d.geometry.TriangleMesh.create_box(20, 20, 20).translate((-10, -10, -10))
+    bbox_line = o3d.geometry.LineSet.create_from_triangle_mesh(bbox)
+
+    gt_mesh = o3d.io.read_triangle_mesh(os.path.join(args.data_path, 'std.ply'))
+
+    # points = np.array(mesh.vertices) / scales
+    # mesh.vertices = o3d.utility.Vector3dVector(points)
+
+    mesh = o3d.geometry.TriangleMesh(gt_mesh)
+
+    trans_mesh(gt_mesh, composition(gt_conf[:4]), gt_conf[4:])
+    trans_mesh(mesh, composition(conf[:4]), conf[4:])
+
+    # o3d.visualization.draw_geometries([mesh])
+    # quit()
+    # o3d.visualization.draw_geometries([pcd, bbox_line])
+    # o3d.visualization.draw_geometries([mesh, pcd, bbox_line])
+    # o3d.visualization.draw_geometries([gt_mesh, pcd, bbox_line])
+    
+    return pcd, gt_mesh, mesh, bbox_line
+
 def test_sample_dec(a, b, c, d, args):
     gt_conf, conf, scales, trans = np.array(a), np.array(b), np.array(c), np.array(d)
 

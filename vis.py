@@ -15,11 +15,12 @@ def get_meshes(path):
     
     return meshes
 
-path = 'E:\work\kitti360\code/net\experiments/fixscale_const_2/result'
-data_path = 'E:\work\kitti360\code\processed/vegetation/trans'
+path = 'E:\work\kitti360\code/net\experiments_new/fixscale_building/result'
+# data_path = 'E:\work\kitti360\code\processed/vegetation/trans'
+data_path = 'E:\work\kitti360\code\processed/building/data'
 dirs = os.listdir(path)
 
-work_dir = 'E:\work\kitti360\code/net\experiments/fixscale_const_2'
+work_dir = 'E:\work\kitti360\code/net\experiments_new/fixscale_building'
 
 mesh_dir = 'E:\work\kitti360\kitti360Scripts\kitti360scripts\custom/all_bboxes'
 
@@ -39,11 +40,11 @@ for dir in dirs:
 
         origin_mesh = None
         for mesh in origin_meshes:
-            if len(mesh.vertices) == 63:
-                if origin_mesh is None:
-                    origin_mesh = mesh
-                else:
-                    origin_mesh += mesh
+            # if len(mesh.vertices) == 63:
+            if origin_mesh is None:
+                origin_mesh = mesh
+            else:
+                origin_mesh += mesh
 
         for i in range(1, len(meshes)):
             gt_meshes[0] += gt_meshes[i]

@@ -1,7 +1,8 @@
+from msilib.schema import Feature
 import torch
 
 from Datasets import SampleData, Decompose
-from Models import PointNet, PointPillar, PointNetV2
+from Models import ManualFeature
 from Evaluate import evaluation
 
 import argparse
@@ -60,12 +61,8 @@ if __name__ == '__main__':
     )
 
     # model = PointNet(args).to(args.device)
-    model = PointNetV2(args).to(args.device)
+    model = ManualFeature(args)
     # if args.pretrain:
-
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    criterion = torch.nn.MSELoss()
 
     Losses = []
     val_Losses = []
@@ -76,34 +73,38 @@ if __name__ == '__main__':
     for epoch in range(0, args.num_epochs):
 
         losses = []
-        center_losses = []
-        center = torch.zeros(args.batch_size, 4).to(args.device)
-        center[:, 3] = 6
-        model.train()
-        
 
         moving_loss = 0
-        moving_loss_1, moving_loss_2, moving_loss_3 = 0, 0, 0
-
-        ori_Min, ori_Max = 10, -10
+        Feature = None
+        out = None
 
         for idx, data in enumerate(train_loader):
             
-            input = data['pts'].to(args.device).permute(0, 2, 1)
-            output = data['output'].to(args.device)
+            input = data['pts'].to(args.device)
+            output = data['output']
 
             # input = torch.zeros_like(input).to(args.device)
             # print (input.dtype)
             # ret = model(input)
-
-
-            ret = model.step(input, output)[0]
-
-            loss = ret[0] * args.w[0] - ret[1] * args.w[1] + ret[2] * args.w[2]
-
-            loss.backward()
-
+            feature = model.extract(input).to('cpu')
+            if Feature is None:
+                Feature = feature
+                out = output
+            else:
+                Feature = torch.concat((Feature, feature), dim=0)
+                out = torch.concat((out, output), dim=0)
+            
             steps += 1
+
+            if steps % 10 == 0:
+                print (steps)
+                print (Feature.shape)
+                print (out.shape)
+                torch.save(Feature, f'{args.work_dir}/feature.pth')
+                torch.save(out, f'{args.work_dir}/out.pth')
+                print ('out')
+
+            continue
 
             if steps % args.grad_cumulate == 0:
                 writer.add_scalar('scale_grad', torch.norm(model.scaleNet.weight.grad).item(), global_step=steps)
