@@ -70,6 +70,42 @@ if __name__ == '__main__':
 
     logs = []
 
+    # Feature = torch.load(f'{args.work_dir}/feature.pth')
+    # Output = torch.load(f'{args.work_dir}/out.pth')[:, :3]
+
+    # Feature = Feature.reshape(Feature.size(0), -1) / 5000
+
+    # print (Feature.shape)
+    # print(Output.shape)
+
+    # # Feature = Feature.to(args.device)
+    # # Output = Output.to(args.device)
+
+    # print (Feature[0])
+
+
+
+    # out = torch.linalg.lstsq(Feature[:10000], Output[:10000], driver='gelsy').solution
+    # print (out[0])
+    # criterion = torch.nn.MSELoss()
+    # Loss = []
+    # for i in range(10000, 20000):
+    #     A, B = Feature[i], Output[i]
+
+    #     C = A @ out
+
+    #     loss = (B - C) ** 2
+    #     # print (loss)
+
+    #     loss = criterion(A @ out, B)
+    #     # print (loss.item())
+    #     Loss.append(loss.item())
+        
+    #     # quit()
+    #     print (np.mean(Loss))
+
+    # quit()
+
     for epoch in range(0, args.num_epochs):
 
         losses = []

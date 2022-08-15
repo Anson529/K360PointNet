@@ -90,8 +90,8 @@ class SampleData(Dataset):
 class Decompose(SampleData):
     
     def getbox(self, bbox):
-        if np.random.random() < 0.2:
-            return bbox
+        # if np.random.random() < 0.2:
+        #     return bbox
 
         conf = np.random.uniform(0, 1, 6)
         conf[: 3] = - conf[: 3]
@@ -137,21 +137,16 @@ class Decompose(SampleData):
 
         SCALE = scales.min()
         scales = np.array([SCALE, SCALE, SCALE])
-
-        # radius = np.max(radius * scales)
+        
         out = np.concatenate((decomposition(R * scales), T * scales), axis=0)
 
         if out[0] < out[1]:
             out[0], out[1] = out[1], out[0]
             out[3] += np.pi / 2
-
-        # if out[3] < 0:
-        #     out[3] += 2 * np.pi
         
         while out[3] > 0.5 * np.pi:
             out[3] -= np.pi
 
-        # print (T)
         pts = torch.FloatTensor(pts * scales)
         R = torch.FloatTensor(R * scales)
         T = torch.FloatTensor(T * scales)
