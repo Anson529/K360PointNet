@@ -58,11 +58,51 @@ class PointNetV2(nn.Module):
 
         L1 = self.criterion(scale, output[:, :3])
         L2 = torch.cosine_similarity(rot, radian2vec(output[:, 3: 4])).mean()
+        # L2 = -self.criterion(rot, radian2vec(output[:, 3: 4]))
+        # L2 = -self.criterion(rot, output[:, 3: 4])
         L3 = self.criterion(loc, output[:, 4:])
 
 
         return (L1, L2, L3), (scale, rot, loc)
-    
+
+class ManualFeature():
+
+    def __init__(self, args):
+        
+        super(ManualFeature, self).__init__()
+
+        pcd_range = np.array(args.point_cloud_range)
+        self.max_dis = 15
+
+        self.grid_size = (pcd_range[3:] - pcd_range[:3]) // args.voxel_size + 1
+
+        self.locs = torch.zeros(tuple(self.grid_size) + (3,))
+        
+        low_bound = torch.FloatTensor(pcd_range[:3])
+        voxel_size = torch.FloatTensor(args.voxel_size)
+
+        for a in range(self.grid_size[0]):
+            for b in range(self.grid_size[1]):
+                for c in range(self.grid_size[2]):
+                    displacement = torch.FloatTensor([a, b, c]) * voxel_size
+                    self.locs[a, b, c] = low_bound +  displacement
+
+        self.locs = self.locs.reshape(-1, 3)
+
+    def extract(self, pcd):
+        N = pcd.size(1)
+        self.locs = self.locs.to(pcd.device)
+        dis = torch.zeros(self.locs.size(0), pcd.size(0), pcd.size(1)).to(pcd.device)
+        feature = torch.zeros(self.max_dis, self.locs.size(0), pcd.size(0)).to(pcd.device)
+        Mx = torch.zeros(2, 2).to(pcd.device)
+        for i in range(self.locs.size(0)):
+            dis[i] = ((pcd - self.locs[i]) ** 2).sum(dim=-1).sqrt().ceil()
+
+        for i in range(self.max_dis):
+            feature[i] = (dis <= (i + 1)).sum(dim=-1)
+        feature = feature.permute(2, 1, 0)
+
+        return feature
 
 class PointPillar(nn.Module):
     

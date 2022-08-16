@@ -3,5 +3,6 @@ train_slumn.sh
 curve.png
 run.py
 experiments
+experiments*
 experiments_new
 __pycache__

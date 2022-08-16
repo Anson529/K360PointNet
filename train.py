@@ -30,6 +30,9 @@ if __name__ == '__main__':
 
     os.makedirs(args.work_dir, exist_ok=True)
 
+    with open(f'{args.work_dir}/args.txt', 'w') as f:
+        json.dump(args.__dict__, f, indent=2)
+
     torch.manual_seed(42)
 
     writer = SummaryWriter(f'{args.work_dir}/tensorboard')

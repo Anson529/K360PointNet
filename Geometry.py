@@ -1,6 +1,6 @@
 import numpy as np
 import os
-import open3d as o3d
+# import open3d as o3d
 from scipy.spatial.transform import Rotation as sc_R
 
 def decomposition(mat):

@@ -90,6 +90,9 @@ class SampleData(Dataset):
 class Decompose(SampleData):
     
     def getbox(self, bbox):
+        if np.random.random() < 0.2:
+            return bbox
+
         conf = np.random.uniform(0, 1, 6)
         conf[: 3] = - conf[: 3]
         size = bbox[3:] - bbox[:3]
