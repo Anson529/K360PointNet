@@ -87,7 +87,7 @@ class PointPillar(nn.Module):
 
         return voxels
         
-class ManualFeature():
+class ManualFeature(nn.Module):
 
     def __init__(self, args):
         
@@ -110,6 +110,8 @@ class ManualFeature():
                     self.locs[a, b, c] = low_bound +  displacement
 
         self.locs = self.locs.reshape(-1, 3)
+        self.sol = None
+        self.criterion = nn.MSELoss()
 
     def extract(self, pcd):
         N = pcd.size(1)
@@ -125,7 +127,26 @@ class ManualFeature():
         feature = feature.permute(2, 1, 0)
 
         return feature
+    
+    def load(self, path):
+        self.sol = torch.load(path)
 
+    def step(self, x, output):
+        x = x.permute(0, 2, 1)
+        feature = self.extract(x).reshape(x.size(0), -1) / 5000
+        sol = self.sol.to(x.device)
+
+        ret = feature @ sol
+        # for i in range(7):
+        #     ret[i + 1] = ret[i]
+        # print (ret[0])
+        
+        L1 = self.criterion(ret[:, :3], output[:, :3])
+        L2 = self.criterion(ret[:, 3], output[:, 3])
+        L3 = self.criterion(ret[:, 4:], output[:, 4:])
+        # L2, L3 = torch.zeros(1).to(x.device), torch.zeros(1).to(x.device)
+
+        return (L1, L2, L3), ret
 
 class VoxelGenerator(object):
     """Voxel generator in numpy implementation.

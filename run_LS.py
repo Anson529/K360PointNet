@@ -10,4 +10,4 @@ os.system('python train_LS.py \
     --num_epochs 40 \
     --type 1 \
     --voxel_size 5 5 5 \
-    --work_dir experiments_LS/fixscale_size5')
+    --work_dir experiments_LS/fixscale_size5_2')

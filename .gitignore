@@ -5,4 +5,5 @@ run.py
 experiments
 experiments_new
 experiments*
+run*.py
 __pycache__

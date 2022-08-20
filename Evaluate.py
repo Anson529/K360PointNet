@@ -1,7 +1,7 @@
 import torch
 
 from Datasets import Decompose, SampleData
-from Models import PointNet, PointPillar, PointNetV2
+from Models import PointNet, PointPillar, PointNetV2, ManualFeature
 from Geometry import test_sample_dec, vis_sample, visualize_sample, test_sample
 
 import argparse
@@ -37,7 +37,7 @@ def evaluation(val_loader, model, args):
         L2.append(ret[1].item())
         L3.append(ret[2].item())
 
-        print (np.mean(losses))
+        print (np.mean(L1), np.mean(L2), np.mean(L3))
 
     return np.mean(losses), np.mean(L1), np.mean(L2), np.mean(L3)
 
@@ -198,8 +198,10 @@ if __name__ == '__main__':
     parser = getparser()
     args = parser.parse_args()
 
-    model = PointNetV2(args).to(args.device)
-    model.load_state_dict(torch.load(args.where_pretrained))
+    # model = PointNetV2(args).to(args.device)
+    # model.load_state_dict(torch.load(args.where_pretrained))
+    model = ManualFeature(args).to(args.device)
+    model.load(args.where_pretrained)
 
     torch.manual_seed(42)
 
