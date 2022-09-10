@@ -10,7 +10,7 @@ import os
 import numpy as np
 from scipy.spatial.transform import Rotation as sc_R
 
-from Geometry import decomposition, test_sample_dec, npy2pcd, composition, trans_mesh
+from Geometry import *
 
 class SampleData(Dataset):
 
@@ -19,6 +19,7 @@ class SampleData(Dataset):
         self.point_cloud_range = args.point_cloud_range
         self.data_path = args.data_path
         self.eps = args.eps
+        self.random_rot = args.random_rot
         self.max_num_points = args.max_num_points
 
         np.random.seed(42)
@@ -90,10 +91,11 @@ class SampleData(Dataset):
 class Decompose(SampleData):
     
     def getbox(self, bbox):
-        if np.random.random() < 0.2:
-            return bbox
+        # if np.random.random() < 0.2:
+        #     return bbox
 
         conf = np.random.uniform(0, 1, 6)
+        # conf = np.array([0, 0, 0, 0.9, 0.9, 0])
         conf[: 3] = - conf[: 3]
         size = bbox[3:] - bbox[:3]
         size = np.concatenate((size, size), axis=0)
@@ -102,7 +104,6 @@ class Decompose(SampleData):
     def __getitem__(self, idx):
         sample_info = self.data_info[idx]
         box_bound = sample_info['bbox']
-        radius = (box_bound[3:] - box_bound[:3]) / 2
 
         # enlarge the box & zero-center
         box_bound = self.getbox(box_bound) #+ [-1, -1, -1, 1, 1, 1]
@@ -120,13 +121,7 @@ class Decompose(SampleData):
 
         R = sample_info['R']
         T = sample_info['T'] - box_center
-        pts = np.zeros((self.max_num_points, 3))
-
-        # get a fix number of points
-        np.random.shuffle(pcd)
-        if len(pcd):
-            for i in range(self.max_num_points):
-                pts[i] = pcd[i % len(pcd)]
+        
 
         # rescale the box to [-10, 10] ^ 3
         box_bound[3: ] -= box_center
@@ -138,26 +133,74 @@ class Decompose(SampleData):
         SCALE = scales.min()
         scales = np.array([SCALE, SCALE, SCALE])
 
-        # radius = np.max(radius * scales)
-        out = np.concatenate((decomposition(R * scales), T * scales), axis=0)
+        if self.random_rot:
+            rot = randrot()
+        else:
+            rot = np.identity(3)
 
+        aug = scales * rot
+
+        out = np.concatenate((decomposition(aug @ R), T @ aug.T), axis=0)
         if out[0] < out[1]:
             out[0], out[1] = out[1], out[0]
             out[3] += np.pi / 2
-
-        # if out[3] < 0:
-        #     out[3] += 2 * np.pi
         
+        if out[3] < 0:
+            out[3] += 2 * np.pi
+
         while out[3] > 0.5 * np.pi:
             out[3] -= np.pi
 
-        # print (T)
-        pts = torch.FloatTensor(pts * scales)
-        R = torch.FloatTensor(R * scales)
-        T = torch.FloatTensor(T * scales)
+        pcd = pcd @ aug.T
+        bound_x = np.logical_and(pcd[:, 0] > self.point_cloud_range[0], pcd[:, 0] < self.point_cloud_range[3])
+        bound_y = np.logical_and(pcd[:, 1] > self.point_cloud_range[1], pcd[:, 1] < self.point_cloud_range[4])
+        bound_z = np.logical_and(pcd[:, 2] > self.point_cloud_range[2], pcd[:, 2] < self.point_cloud_range[5])
+
+        bb_filter = np.logical_and(np.logical_and(bound_x, bound_y), bound_z)
+        pcd = pcd[bb_filter]
+
+        pts = np.zeros((self.max_num_points, 3))
+
+        # get a fix number of points
+        np.random.shuffle(pcd)
+        if len(pcd):
+            for i in range(self.max_num_points):
+                pts[i] = pcd[i % len(pcd)]
+
+        # import open3d as o3d
+
+        # mesh_1 = o3d.io.read_triangle_mesh(f'{self.data_path}/std.ply')
+        # A = np.array(mesh_1.vertices)
+        # A = A @ R.T + T + box_center
+        # # A = A @ aug.T
+        # mesh_1.vertices = o3d.utility.Vector3dVector(A)
+
+        pts = torch.FloatTensor(pts)
+        R = torch.FloatTensor(aug @ R)
+        T = torch.FloatTensor(T @ aug.T)
         out = torch.FloatTensor(out)
 
-        return {"pts": pts, "output": out, "R": R, "T": T, "scales": scales, "trans": box_center, "pcd_path": sample_info['pcd_path']}
+        # pts = torch.FloatTensor(pts * scales @ rot)
+        # R = torch.FloatTensor(rot.T * scales @ R)
+        # T = torch.FloatTensor(T * scales @ rot)
+        # out = torch.FloatTensor(out)
+
+        
+        # mesh = o3d.io.read_triangle_mesh(f'{self.data_path}/std.ply')
+        # trans_mesh(mesh, R.numpy(), T.numpy())
+        # trans_mesh(mesh, np.linalg.inv(aug), box_center)
+        # pts = npy2pcd(pts.numpy() @ np.linalg.inv(aug.T) + box_center, file=False)
+
+        # bbox = o3d.geometry.TriangleMesh.create_box(20, 20, 20).translate((-10, -10, -10))
+        # bbox_line = o3d.geometry.LineSet.create_from_triangle_mesh(bbox)
+
+        # o3d.visualization.draw_geometries([pts])
+        # o3d.visualization.draw_geometries([pts, mesh, mesh_1])
+        # quit()
+        # quit()
+
+
+        return {"pts": pts, "output": out, "R": R, "T": T, "scales": scales, "trans": box_center, "pcd_path": sample_info['pcd_path'], "aug": aug}
         
 from Options import getparser
 

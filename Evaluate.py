@@ -31,7 +31,7 @@ def evaluation(val_loader, model, args):
 
         ret = model.step(input, output)[0]
 
-        loss = ret[0] * args.w[0] - ret[1] * args.w[1] + ret[2] * args.w[2]
+        loss = ret[0] * args.w[0] + ret[1] * args.w[1] + ret[2] * args.w[2]
         losses.append(loss.item())
         L1.append(ret[0].item())
         L2.append(ret[1].item())

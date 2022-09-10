@@ -1,7 +1,7 @@
 import torch
 
 from Datasets import SampleData, Decompose
-from Models import PointNet, PointPillar, PointNetV2
+from Models import PointNet, PointPillar, PointNetV2, ManualFeature_Net
 from Evaluate import evaluation
 
 import argparse
@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 
 from Options import getparser
+
+from warmup_scheduler import GradualWarmupScheduler
 
 def save_log(logs, work_dir):
     with open(f'{work_dir}/logs.json', 'w') as f:
@@ -63,11 +65,15 @@ if __name__ == '__main__':
     )
 
     # model = PointNet(args).to(args.device)
-    model = PointNetV2(args).to(args.device)
+    # model = PointNetV2(args).to(args.device)
+    model = ManualFeature_Net(args).to(args.device)
+    model.load(args.where_pretrained)
     # if args.pretrain:
 
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    schedular = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.num_epochs * len(train_loader))
+    scheduler_warmup = GradualWarmupScheduler(optimizer, multiplier=100, total_epoch=1000, after_scheduler=schedular)
     criterion = torch.nn.MSELoss()
 
     Losses = []
@@ -102,26 +108,27 @@ if __name__ == '__main__':
 
             ret = model.step(input, output)[0]
 
-            loss = ret[0] * args.w[0] - ret[1] * args.w[1] + ret[2] * args.w[2]
+            loss = ret[0] * args.w[0] + ret[1] * args.w[1] + ret[2] * args.w[2]
 
-            loss.backward()
+            losses.append(loss.item())
+            Losses.append(np.mean(losses))
 
             steps += 1
+            moving_loss = moving_loss * 0.98 + loss.item() * 0.02
+
+            
+            # print (Losses[-1])
+            writer.add_scalar('lr', optimizer.param_groups[0]['lr'], global_step=steps)
+            writer.add_scalar('loss', loss.item(), global_step=steps)
+            writer.add_scalar('scale_loss', ret[0].item(), global_step=steps)
+            writer.add_scalar('rot_loss', ret[1].item(), global_step=steps)
+            writer.add_scalar('loc_loss', ret[2].item(), global_step=steps)
+
+            loss.backward()
 
             if steps % args.grad_cumulate == 0:
                 optimizer.step()
                 optimizer.zero_grad()
-                
-            losses.append(loss.item())
-
-            moving_loss = moving_loss * 0.98 + loss.item() * 0.02
-
-            Losses.append(np.mean(losses))
-            # print (Losses[-1])
-            writer.add_scalar('train_loss', loss.item(), global_step=steps)
-            writer.add_scalar('scale_loss', ret[0].item(), global_step=steps)
-            writer.add_scalar('rot_similarity', ret[1].item(), global_step=steps)
-            writer.add_scalar('loc_loss', ret[2].item(), global_step=steps)
 
             if idx % 10 == 0:
                 
@@ -135,6 +142,7 @@ if __name__ == '__main__':
                 save_log(logs, args.work_dir)
 
                 torch.save(model.state_dict(), f'{args.work_dir}/checkpoint_{epoch}.pth')
+            scheduler_warmup.step()
 
         val_loss, L1, L2, L3 = evaluation(val_loader, model, args)
         logs.append({'epoch': epoch, 'val_loss': val_loss})
@@ -142,7 +150,7 @@ if __name__ == '__main__':
 
         writer.add_scalar('val_loss', val_loss, global_step=epoch)
         writer.add_scalar('val_scale_loss', L1, global_step=epoch)
-        writer.add_scalar('val_rot_similarity', L2, global_step=epoch)
+        writer.add_scalar('val_rot_loss', L2, global_step=epoch)
         writer.add_scalar('val_loc_loss', L3, global_step=epoch)
 
         val_Losses.append(val_loss)
@@ -150,6 +158,8 @@ if __name__ == '__main__':
         plt.savefig(f'{args.work_dir}/val_curve.png')
         plt.cla()
         print ('233', epoch)
+
+        # schedular.step()
     
     # result = {'train': Losses, 'val': val_Losses}
 

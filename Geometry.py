@@ -3,6 +3,10 @@ import os
 # import open3d as o3d
 from scipy.spatial.transform import Rotation as sc_R
 
+def randrot():
+    R = sc_R.from_euler('xyz', [0, 0, np.random.rand() * np.pi])
+    return R.as_matrix()
+
 def decomposition(mat):
     scales = np.array([np.linalg.norm(mat.T[0]), np.linalg.norm(mat.T[1]), np.linalg.norm(mat.T[2])])
     rot = mat / scales
@@ -21,8 +25,11 @@ def composition(out):
 
     return rot
 
-def npy2pcd(path):
-    pts = np.load(path)[:, :3]
+def npy2pcd(path, file=True):
+    if file:
+        pts = np.load(path)[:, :3]
+    else:
+        pts = path
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(pts)
 
@@ -58,8 +65,15 @@ def trans_mesh(mesh, R, T):
     points = np.array(mesh.vertices) @ R.T + T
     mesh.vertices = o3d.utility.Vector3dVector(points)
 
-def test_sample_dec(a, b, c, d, args):
-    gt_conf, conf, scales, trans = np.array(a), np.array(b), np.array(c), np.array(d)
+def vis_sample(pts, a, b, args):
+    pts, gt_conf, conf = np.array(pts), np.array(a), np.array(b)
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pts)
+
+    FOR = o3d.geometry.TriangleMesh.create_coordinate_frame(origin=gt_conf[4:])
+    bbox = o3d.geometry.TriangleMesh.create_box(20, 20, 20).translate((-10, -10, -10))
+    bbox_line = o3d.geometry.LineSet.create_from_triangle_mesh(bbox)
 
     gt_mesh = o3d.io.read_triangle_mesh(os.path.join(args.data_path, 'std.ply'))
 
@@ -67,19 +81,29 @@ def test_sample_dec(a, b, c, d, args):
     # mesh.vertices = o3d.utility.Vector3dVector(points)
 
     mesh = o3d.geometry.TriangleMesh(gt_mesh)
-    # print (conf.shape)
-    gt_conf[:3] /= scales
-    conf[:3] /= scales
-
-    gt_conf[4:] /= scales
-    conf[4:] /= scales
 
     trans_mesh(gt_mesh, composition(gt_conf[:4]), gt_conf[4:])
     trans_mesh(mesh, composition(conf[:4]), conf[4:])
 
-    goback(gt_mesh, [1, 1, 1], trans)
-    goback(mesh, [1, 1, 1], trans)
+    # o3d.visualization.draw_geometries([mesh])
+    # quit()
+    # o3d.visualization.draw_geometries([pcd, bbox_line])
+    # o3d.visualization.draw_geometries([mesh, pcd, bbox_line])
+    # o3d.visualization.draw_geometries([gt_mesh, pcd, bbox_line])
+    
+    return pcd, gt_mesh, mesh, bbox_line
 
+def test_sample_dec(a, b, c, d, args):
+    gt_conf, conf, aug, trans = np.array(a), np.array(b), np.array(c), np.array(d)
+
+    gt_mesh = o3d.io.read_triangle_mesh(os.path.join(args.data_path, 'std.ply'))
+
+    mesh = o3d.geometry.TriangleMesh(gt_mesh)
+
+    trans_mesh(gt_mesh, composition(gt_conf[:4]), gt_conf[4:])
+    trans_mesh(gt_mesh, np.linalg.inv(aug), trans)
+    trans_mesh(mesh, composition(conf[:4]), conf[4:])
+    trans_mesh(mesh, np.linalg.inv(aug), trans)
     # o3d.visualization.draw_geometries([mesh])
 
     return gt_mesh, mesh
