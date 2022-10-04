@@ -1,6 +1,9 @@
 sbatchlogs
 train_slumn.sh
-curve.png
+*.png
+*.json
+*.zip
+imgs
 run.py
 experiments
 experiments_new

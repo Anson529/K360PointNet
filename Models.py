@@ -1,10 +1,14 @@
 import torch
 import torch.nn as nn
-import numba
+import cv2
 # Copyright (c) OpenMMLab. All rights reserved.
 import numpy as np
 from torchvision.models import resnet18
 from pointnet.model import PointNetfeat
+
+from Modules import *
+
+from utils import Plot
 
 
 def radian2vec(x):
@@ -12,7 +16,7 @@ def radian2vec(x):
     return torch.concat((a, b), dim=1)
 
 def vec2radian(x):
-    return torch.atan2(x[:, 1:], x[:, :1])
+    return torch.atan2(x[..., 1:], x[..., :1])
 
 class PointNet(nn.Module):
     def __init__(self, args):
@@ -129,7 +133,8 @@ class ManualFeature(nn.Module):
         return feature
     
     def load(self, path):
-        self.sol = torch.load(path)
+        self.sol = torch.tensor(np.load(path))
+        # self.sol = torch.load(path)
 
     def step(self, x, output):
         x = x.permute(0, 2, 1)
@@ -148,280 +153,308 @@ class ManualFeature(nn.Module):
 
         return (L1, L2, L3), ret
 
-class VoxelGenerator(object):
-    """Voxel generator in numpy implementation.
+class ManualFeature_Net(ManualFeature):
 
-    Args:
-        voxel_size (list[float]): Size of a single voxel
-        point_cloud_range (list[float]): Range of points
-        max_num_points (int): Maximum number of points in a single voxel
-        max_voxels (int, optional): Maximum number of voxels.
-            Defaults to 20000.
-    """
+    
+    def load(self, path):
+        # self.sol = ConvNet()
+        self.sol = ConvNetV2()
+        self.sol.load_state_dict(torch.load(path))
+        # self.sol = torch.load(path)
 
-    def __init__(self,
-                 voxel_size,
-                 point_cloud_range,
-                 max_num_points,
-                 max_voxels=20000):
+    def step(self, x, output):
+        x = x.permute(0, 2, 1)
+        feature = self.extract(x) / 5000
+        feature = feature.reshape(len(feature), 11, 11, 11, -1).permute(0, 4, 1, 2, 3)
+        sol = self.sol.to(x.device)
 
-        point_cloud_range = np.array(point_cloud_range, dtype=np.float32)
-        # [0, -40, -3, 70.4, 40, 1]
-        voxel_size = np.array(voxel_size, dtype=np.float32)
-        grid_size = (point_cloud_range[3:] -
-                     point_cloud_range[:3]) / voxel_size
-        grid_size = np.round(grid_size).astype(np.int64)
+        return sol.step(feature, output)
 
-        self._voxel_size = voxel_size
-        self._point_cloud_range = point_cloud_range
-        self._max_num_points = max_num_points
-        self._max_voxels = max_voxels
-        self._grid_size = grid_size
+class ManualFeature_rot(nn.Module):
 
-    def generate(self, points):
-        """Generate voxels given points."""
-        return points_to_voxel(points, self._voxel_size,
-                               self._point_cloud_range, self._max_num_points,
-                               False, self._max_voxels)
+    def __init__(self, args):
+        
+        super(ManualFeature_rot, self).__init__()
 
-    @property
-    def voxel_size(self):
-        """list[float]: Size of a single voxel."""
-        return self._voxel_size
+        pcd_range = np.array(args.point_cloud_range)
+        self.max_dis = 15
 
-    @property
-    def max_num_points_per_voxel(self):
-        """int: Maximum number of points per voxel."""
-        return self._max_num_points
+        self.grid_size = (pcd_range[3:] - pcd_range[:3]) // args.voxel_size + 1
+        self.voxel_size = torch.FloatTensor(args.voxel_size)
+        
+        self.locs = torch.zeros(tuple(self.grid_size) + (3,))
 
-    @property
-    def point_cloud_range(self):
-        """list[float]: Range of point cloud."""
-        return self._point_cloud_range
+        angs = torch.FloatTensor([(np.pi / args.ang_bins * ang - np.pi / 2) for ang in range(args.ang_bins)])
+        mats = []
 
-    @property
-    def grid_size(self):
-        """np.ndarray: The size of grids."""
-        return self._grid_size
+        for ang in angs:
+            mats.append([
+                [torch.cos(ang), -torch.sin(ang), 0],
+                [torch.sin(ang), torch.cos(ang), 0],
+                [0, 0, 1]
+            ])
 
-    def __repr__(self):
-        """str: Return a string that describes the module."""
-        repr_str = self.__class__.__name__
-        indent = ' ' * (len(repr_str) + 1)
-        repr_str += f'(voxel_size={self._voxel_size},\n'
-        repr_str += indent + 'point_cloud_range='
-        repr_str += f'{self._point_cloud_range.tolist()},\n'
-        repr_str += indent + f'max_num_points={self._max_num_points},\n'
-        repr_str += indent + f'max_voxels={self._max_voxels},\n'
-        repr_str += indent + f'grid_size={self._grid_size.tolist()}'
-        repr_str += ')'
-        return repr_str
+        self.mats = torch.FloatTensor(mats)
+        
+        low_bound = torch.FloatTensor(pcd_range[:3])
+        voxel_size = torch.FloatTensor(args.voxel_size)
 
+        self.offset = -low_bound + torch.FloatTensor(args.voxel_size) / 2
 
-def points_to_voxel(points,
-                    voxel_size,
-                    coors_range,
-                    max_points=35,
-                    reverse_index=True,
-                    max_voxels=20000):
-    """convert kitti points(N, >=3) to voxels.
+        for a in range(self.grid_size[0]):
+            for b in range(self.grid_size[1]):
+                for c in range(self.grid_size[2]):
+                    displacement = torch.FloatTensor([a, b, c]) * voxel_size
+                    self.locs[a, b, c] = low_bound +  displacement
 
-    Args:
-        points (np.ndarray): [N, ndim]. points[:, :3] contain xyz points and
-            points[:, 3:] contain other information such as reflectivity.
-        voxel_size (list, tuple, np.ndarray): [3] xyz, indicate voxel size
-        coors_range (list[float | tuple[float] | ndarray]): Voxel range.
-            format: xyzxyz, minmax
-        max_points (int): Indicate maximum points contained in a voxel.
-        reverse_index (bool): Whether return reversed coordinates.
-            if points has xyz format and reverse_index is True, output
-            coordinates will be zyx format, but points in features always
-            xyz format.
-        max_voxels (int): Maximum number of voxels this function creates.
-            For second, 20000 is a good choice. Points should be shuffled for
-            randomness before this function because max_voxels drops points.
+        self.locs = self.locs.reshape(-1, 3)
+        self.sol = None
+        self.criterion = nn.MSELoss()
 
-    Returns:
-        tuple[np.ndarray]:
-            voxels: [M, max_points, ndim] float tensor. only contain points.
-            coordinates: [M, 3] int32 tensor.
-            num_points_per_voxel: [M] int32 tensor.
-    """
-    if not isinstance(voxel_size, np.ndarray):
-        voxel_size = np.array(voxel_size, dtype=points.dtype)
-    if not isinstance(coors_range, np.ndarray):
-        coors_range = np.array(coors_range, dtype=points.dtype)
-    voxelmap_shape = (coors_range[3:] - coors_range[:3]) / voxel_size
-    voxelmap_shape = tuple(np.round(voxelmap_shape).astype(np.int32).tolist())
-    if reverse_index:
-        voxelmap_shape = voxelmap_shape[::-1]
-    # don't create large array in jit(nopython=True) code.
-    num_points_per_voxel = np.zeros(shape=(max_voxels, ), dtype=np.int32)
-    coor_to_voxelidx = -np.ones(shape=voxelmap_shape, dtype=np.int32)
-    voxels = np.zeros(
-        shape=(max_voxels, max_points, points.shape[-1]), dtype=points.dtype)
-    coors = np.zeros(shape=(max_voxels, 3), dtype=np.int32)
+    def extract(self, pcd):
+        N = pcd.size(1)
 
-    if reverse_index:
-        voxel_num = _points_to_voxel_reverse_kernel(
-            points, voxel_size, coors_range, num_points_per_voxel,
-            coor_to_voxelidx, voxels, coors, max_points, max_voxels)
+        self.locs = self.locs.to(pcd.device)
+        self.mats = self.mats.to(pcd.device)
+        self.offset = self.offset.to(pcd.device)
+        self.voxel_size = self.voxel_size.to(pcd.device)
 
-    else:
-        voxel_num = _points_to_voxel_kernel(points, voxel_size, coors_range,
-                                            num_points_per_voxel,
-                                            coor_to_voxelidx, voxels, coors,
-                                            max_points, max_voxels)
+        dis = torch.zeros(self.locs.size(0), pcd.size(0), pcd.size(1)).to(pcd.device)
+        feature = torch.zeros(self.max_dis, self.locs.size(0), pcd.size(0)).to(pcd.device)
+        feature_rot = torch.zeros(self.mats.size(0), pcd.size(0), self.locs.size(0)).to(pcd.device)
 
-    coors = coors[:voxel_num]
-    voxels = voxels[:voxel_num]
-    num_points_per_voxel = num_points_per_voxel[:voxel_num]
+        for i in range(self.locs.size(0)):
+            dis[i] = ((pcd - self.locs[i]) ** 2).sum(dim=-1).sqrt().ceil()
 
-    return voxels, coors, num_points_per_voxel
+        for i in range(self.max_dis):
+            feature[i] = (dis <= (i + 1)).sum(dim=-1)
+        feature = feature.permute(2, 1, 0)
 
+        # for i in range(10):
+        #     pts = np.array(pcd[i].to('cpu'))
+        #     print (pts.shape)
+        #     np.save(f'/projects/perception/personals/wenjiey/works/tools/imgs/{i + 1}/pts.npy', pts)
+        
+        # quit()
 
-@numba.jit(nopython=True)
-def _points_to_voxel_reverse_kernel(points,
-                                    voxel_size,
-                                    coors_range,
-                                    num_points_per_voxel,
-                                    coor_to_voxelidx,
-                                    voxels,
-                                    coors,
-                                    max_points=35,
-                                    max_voxels=20000):
-    """convert kitti points(N, >=3) to voxels.
+        for i in range(len(self.mats)):
+            pts = pcd @ self.mats[i].T + self.offset
+            pts = (pts / self.voxel_size).floor()
 
-    Args:
-        points (np.ndarray): [N, ndim]. points[:, :3] contain xyz points and
-            points[:, 3:] contain other information such as reflectivity.
-        voxel_size (list, tuple, np.ndarray): [3] xyz, indicate voxel size
-        coors_range (list[float | tuple[float] | ndarray]): Range of voxels.
-            format: xyzxyz, minmax
-        num_points_per_voxel (int): Number of points per voxel.
-        coor_to_voxel_idx (np.ndarray): A voxel grid of shape (D, H, W),
-            which has the same shape as the complete voxel map. It indicates
-            the index of each corresponding voxel.
-        voxels (np.ndarray): Created empty voxels.
-        coors (np.ndarray): Created coordinates of each voxel.
-        max_points (int): Indicate maximum points contained in a voxel.
-        max_voxels (int): Maximum number of voxels this function create.
-            for second, 20000 is a good choice. Points should be shuffled for
-            randomness before this function because max_voxels drops points.
+            pts = pts[..., 2] + pts[..., 1] * self.grid_size[2] + pts[..., 0] * self.grid_size[1] * self.grid_size[2]
 
-    Returns:
-        tuple[np.ndarray]:
-            voxels: Shape [M, max_points, ndim], only contain points.
-            coordinates: Shape [M, 3].
-            num_points_per_voxel: Shape [M].
-    """
-    # put all computations to one loop.
-    # we shouldn't create large array in main jit code, otherwise
-    # reduce performance
-    N = points.shape[0]
-    # ndim = points.shape[1] - 1
-    ndim = 3
-    ndim_minus_1 = ndim - 1
-    grid_size = (coors_range[3:] - coors_range[:3]) / voxel_size
-    # np.round(grid_size)
-    # grid_size = np.round(grid_size).astype(np.int64)(np.int32)
-    grid_size = np.round(grid_size, 0, grid_size).astype(np.int32)
-    coor = np.zeros(shape=(3, ), dtype=np.int32)
-    voxel_num = 0
-    failed = False
-    for i in range(N):
-        failed = False
-        for j in range(ndim):
-            c = np.floor((points[i, j] - coors_range[j]) / voxel_size[j])
-            if c < 0 or c >= grid_size[j]:
-                failed = True
-                break
-            coor[ndim_minus_1 - j] = c
-        if failed:
-            continue
-        voxelidx = coor_to_voxelidx[coor[0], coor[1], coor[2]]
-        if voxelidx == -1:
-            voxelidx = voxel_num
-            if voxel_num >= max_voxels:
-                continue
-            voxel_num += 1
-            coor_to_voxelidx[coor[0], coor[1], coor[2]] = voxelidx
-            coors[voxelidx] = coor
-        num = num_points_per_voxel[voxelidx]
-        if num < max_points:
-            voxels[voxelidx, num] = points[i]
-            num_points_per_voxel[voxelidx] += 1
-    return voxel_num
+            pts = pts.long()
+            for j in range(pcd.size(0)):
+                feature_rot[i, j] = torch.histc(pts[j], bins=self.locs.size(0), min=-0.5, max=self.locs.size(0) - 0.5)
+            
+            # for j in range(pcd.size(0)):
+            #     for pt in pts[j]:
+            #         if pt >= 0 and pt < self.locs.size(0):
+            #             feature_rot[i, j, pt] += 1
+        # quit()
+        feature_rot = feature_rot.permute(1, 2, 0)
+        feature = torch.cat((feature, feature_rot), axis=-1) / pcd.size(1)
 
+        return feature
+    
+    def load(self, path):
+        self.sol = torch.tensor(np.load(path))
+        # self.sol = torch.load(path)
 
-@numba.jit(nopython=True)
-def _points_to_voxel_kernel(points,
-                            voxel_size,
-                            coors_range,
-                            num_points_per_voxel,
-                            coor_to_voxelidx,
-                            voxels,
-                            coors,
-                            max_points=35,
-                            max_voxels=20000):
-    """convert kitti points(N, >=3) to voxels.
+    def step(self, x, output):
+        x = x.permute(0, 2, 1)
+        feature = self.extract(x).reshape(x.size(0), -1)
+        sol = self.sol.to(x.device)
 
-    Args:
-        points (np.ndarray): [N, ndim]. points[:, :3] contain xyz points and
-            points[:, 3:] contain other information such as reflectivity.
-        voxel_size (list, tuple, np.ndarray): [3] xyz, indicate voxel size.
-        coors_range (list[float | tuple[float] | ndarray]): Range of voxels.
-            format: xyzxyz, minmax
-        num_points_per_voxel (int): Number of points per voxel.
-        coor_to_voxel_idx (np.ndarray): A voxel grid of shape (D, H, W),
-            which has the same shape as the complete voxel map. It indicates
-            the index of each corresponding voxel.
-        voxels (np.ndarray): Created empty voxels.
-        coors (np.ndarray): Created coordinates of each voxel.
-        max_points (int): Indicate maximum points contained in a voxel.
-        max_voxels (int): Maximum number of voxels this function create.
-            for second, 20000 is a good choice. Points should be shuffled for
-            randomness before this function because max_voxels drops points.
+        ret = feature @ sol
+        # for i in range(7):
+        #     ret[i + 1] = ret[i]
+        # print (ret[0])
+        
+        L1 = self.criterion(ret[:, :3], output[:, :3])
+        L2 = self.criterion(ret[:, 3], output[:, 3])
+        L3 = self.criterion(ret[:, 4:], output[:, 4:])
+        # L2, L3 = torch.zeros(1).to(x.device), torch.zeros(1).to(x.device)
 
-    Returns:
-        tuple[np.ndarray]:
-            voxels: Shape [M, max_points, ndim], only contain points.
-            coordinates: Shape [M, 3].
-            num_points_per_voxel: Shape [M].
-    """
-    N = points.shape[0]
-    # ndim = points.shape[1] - 1
-    ndim = 3
-    grid_size = (coors_range[3:] - coors_range[:3]) / voxel_size
-    # grid_size = np.round(grid_size).astype(np.int64)(np.int32)
-    grid_size = np.round(grid_size, 0, grid_size).astype(np.int32)
+        return (L1, L2, L3), ret
 
-    # lower_bound = coors_range[:3]
-    # upper_bound = coors_range[3:]
-    coor = np.zeros(shape=(3, ), dtype=np.int32)
-    voxel_num = 0
-    failed = False
-    for i in range(N):
-        failed = False
-        for j in range(ndim):
-            c = np.floor((points[i, j] - coors_range[j]) / voxel_size[j])
-            if c < 0 or c >= grid_size[j]:
-                failed = True
-                break
-            coor[j] = c
-        if failed:
-            continue
-        voxelidx = coor_to_voxelidx[coor[0], coor[1], coor[2]]
-        if voxelidx == -1:
-            voxelidx = voxel_num
-            if voxel_num >= max_voxels:
-                continue
-            voxel_num += 1
-            coor_to_voxelidx[coor[0], coor[1], coor[2]] = voxelidx
-            coors[voxelidx] = coor
-        num = num_points_per_voxel[voxelidx]
-        if num < max_points:
-            voxels[voxelidx, num] = points[i]
-            num_points_per_voxel[voxelidx] += 1
-    return voxel_num
+class ManualFeature_rot_Net(ManualFeature_rot):
 
+    def load(self, path):
+        self.sol = ConvNetV2()
+        self.sol.load_state_dict(torch.load(path))
+
+    def step(self, x, output):
+        x = x.permute(0, 2, 1)
+        feature = self.extract(x)
+        feature = feature.reshape(len(feature), 11, 11, 11, -1).permute(0, 4, 1, 2, 3)
+        sol = self.sol.to(x.device)
+
+        return sol.step(feature, output)
+
+class OPBB(nn.Module):
+
+    def __init__(self):
+        super(OPBB, self).__init__()
+        
+        self.criterion = nn.MSELoss()
+
+    def forward(self, x):
+        x = x.permute(0, 2, 1)
+
+        x_2d = x[..., :2]
+        z_low = x[..., 2].min(-1)[0]
+        z_upp = x[..., 2].max(-1)[0]
+
+        rec = []
+        ret = torch.zeros(x.size(0), 7)
+        ret[..., 2] = z_upp - z_low
+        ret[..., -1] = (z_low + z_upp) / 2
+
+        for i in range(len(x)):
+            rec = cv2.minAreaRect(np.array(x_2d[i].cpu()))
+            
+            ret[i, 4:6] = torch.tensor(rec[0])
+            ret[i, :2] = torch.tensor(rec[1])
+            ret[i, 3] = torch.tensor(np.pi / 180 * rec[2])
+
+        ret = ret.to(x.device)
+
+        scale = ret[:, :3]
+        rot = ret[:, 3:4]
+        loc = ret[:, 4:]
+
+        return scale, rot, loc
+
+    def step(self, x, y):
+        
+        scale, rot, loc = self.forward(x)
+
+        L1 = self.criterion(scale, y[:, :3])
+        L2 = -torch.abs(torch.cosine_similarity(radian2vec(rot), radian2vec(y[:, 3: 4]))).mean()
+        L3 = self.criterion(loc, y[:, 4:])
+
+        ret = torch.concat((scale, rot, loc), dim=1)
+
+        return (L1, L2, L3), ret
+
+class ManualFeature_2d(nn.Module):
+    def __init__(self, args):
+        
+        super(ManualFeature_2d, self).__init__()
+
+        pcd_range = np.array(args.point_cloud_range)
+
+        self.grid_size_2d = (pcd_range[3:5] - pcd_range[:2]) // args.voxel_size_2d + 1
+        self.voxel_size_2d = torch.FloatTensor(args.voxel_size_2d)
+
+        low_bound_2d = torch.FloatTensor(pcd_range[:2])
+        self.offset_2d = -low_bound_2d + self.voxel_size_2d / 2
+        self.size_2d = self.grid_size_2d[0] * self.grid_size_2d[1]
+
+        self.sol = None
+
+        # angs = torch.FloatTensor([(np.pi / args.ang_bins * ang - np.pi / 2) for ang in range(args.ang_bins)])
+        angs = torch.FloatTensor([(2 * np.pi / args.ang_bins * ang) for ang in range(args.ang_bins)])
+        mats = []
+
+        for ang in angs:
+            mats.append([
+                [torch.cos(ang), -torch.sin(ang), 0],
+                [torch.sin(ang), torch.cos(ang), 0],
+                [0, 0, 1]
+            ])
+
+        self.mats = torch.FloatTensor(mats)
+    
+    def load(self, path):
+        self.sol = StepNet()
+        self.sol.load_state_dict(torch.load(path))
+
+    def extract(self, pcd):
+        N = pcd.size(1)
+
+        self.mats = self.mats.to(pcd.device)
+        self.offset_2d = self.offset_2d.to(pcd.device)
+        self.voxel_size_2d = self.voxel_size_2d.to(pcd.device)
+
+        feature_rot = torch.zeros(self.mats.size(0), pcd.size(0), self.size_2d).to(pcd.device)
+
+        for i in range(len(self.mats)):
+            pts = (pcd @ self.mats[i].T)[..., :2] + self.offset_2d
+            pts = (pts[..., :2] / self.voxel_size_2d).floor()
+
+            pts = pts[..., 1] + pts[..., 0] * self.grid_size_2d[1]
+
+            pts = pts.long()
+            for j in range(pcd.size(0)):
+                feature_rot[i, j] = torch.histc(pts[j], bins=self.size_2d, min=-0.5, max=self.size_2d - 0.5)
+
+        feature = feature_rot.permute(1, 2, 0) / pcd.size(1)
+        
+        return feature
+    
+    def forward(self, x):
+        return x
+
+    def step(self, x, y):
+        x = x.permute(0, 2, 1)
+        x = self.extract(x)
+        x = x.reshape(x.size(0), 21, 21, -1).permute(0, 3, 1, 2)
+
+        scale, rot, loc = self.forward(x)
+
+        L1 = self.criterion(scale, y[:, :3])
+        L2 = -torch.cosine_similarity(radian2vec(rot), radian2vec(y[:, 3: 4])).mean()
+        L3 = self.criterion(loc, y[:, 4:])
+
+        ret = torch.concat((scale, rot, loc), dim=1)
+
+        return (L1, L2, L3), ret
+
+class ManualFeature_2d_Net(ManualFeature_2d):
+    
+    def load(self, path):
+        self.sol = SplitNet()
+        self.sol.load_state_dict(torch.load(path))
+
+    def step(self, x, y):
+        x = x.permute(0, 2, 1)
+        z1, z2 = x[..., 2].min(axis=1)[0], x[..., 2].max(axis=1)[0]
+        x = self.extract(x)
+        x = x.reshape(x.size(0), 21, 21, -1).permute(0, 3, 1, 2)
+
+        if z1 != z2:
+            return self.sol.step(None, x, y, z2 - z1, (z1 + z2) / 2)
+
+        return self.sol.step(None, x, y)
+
+# test
+# import open3d as o3d
+
+# pts = torch.rand(100, 3)
+
+# angs = torch.FloatTensor([(np.pi / 18 * ang - np.pi / 2) for ang in range(18)])
+
+# mats = []
+
+# for ang in angs:
+#     mats.append([
+#         [torch.cos(ang), -torch.sin(ang), 0],
+#         [torch.sin(ang), torch.cos(ang), 0],
+#         [0, 0, 1]
+#     ])
+
+# mats = torch.FloatTensor(mats)
+
+# for i in range(100):
+#     pts[i] = torch.ones(3) * i / 100.0
+
+# for mat in mats:
+#     new_pts = pts @ mat.T
+#     new_pts = np.array(new_pts)
+#     print (type(new_pts), new_pts.shape)
+#     new_pts = o3d.utility.Vector3dVector(new_pts)
+#     pcd = o3d.geometry.PointCloud(new_pts)
+#     FOR = o3d.geometry.TriangleMesh.create_coordinate_frame(origin=[0,0,0])
+#     o3d.visualization.draw_geometries([pcd, FOR])

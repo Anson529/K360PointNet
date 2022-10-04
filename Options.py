@@ -6,11 +6,19 @@ def getparser():
     parser.add_argument('--data_path', type=str, default='E:\work\kitti360\code\processed/vegetation/trans')
     parser.add_argument('--info_path', type=str, default='E:\work\kitti360\code\processed/vegetation/trans\info.pkl')
 
+    parser.add_argument('--ambig', action='store_true')
+
+    parser.add_argument('--voxel_size_2d', nargs='+', type=int, default=[1, 1])
+
+
     parser.add_argument('--voxel_size', nargs='+', type=int, default=[1, 1, 1])
     parser.add_argument('--point_cloud_range', type=list, default=[-10, -10, -10, 10, 10, 10])
     parser.add_argument('--max_num_points_voxel', type=int, default=100)
     parser.add_argument('--max_num_points', type=int, default=5000)
+    parser.add_argument('--ang_bins', type=int, default=18)
+
     parser.add_argument('--eps', type=float, default=0)
+    parser.add_argument('--random_rot', action='store_true')
 
     parser.add_argument('--type', type=int, default=0)
 

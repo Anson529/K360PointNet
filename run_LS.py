@@ -1,7 +1,7 @@
 import os
 
 os.system('python train_LS.py \
-    --batch_size 8 \
+    --batch_size 2 \
     --device cuda \
     --eps 0.6 \
     --grad_cumulate 20 \
@@ -9,5 +9,7 @@ os.system('python train_LS.py \
     --out_dim 7 \
     --num_epochs 40 \
     --type 1 \
-    --voxel_size 5 5 5 \
-    --work_dir experiments_LS/fixscale_size5_2')
+    --voxel_size 2 2 2 \
+    --data_path E:\work\kitti360\code\processed/building/data \
+    --info_path E:\work\kitti360\code\processed/building/data/info.pkl \
+    --work_dir experiments_other/trash/fixscale_size2')

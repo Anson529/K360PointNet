@@ -15,12 +15,16 @@ def get_meshes(path):
     
     return meshes
 
-path = 'E:\work\kitti360\code/net\experiments_new/fixscale_building/result'
+cat_ID = 11
+cat_NAME = 'building'
+NAME = 'fixscale_size2_2dfeat_randrot_split_1200e_lrdecay_shuffle_vec_drop0.5_111_3L_3L_bigdata_100pts'
+
+path = f'E:\work\kitti360\code/net\experiments_gID/building_new/{NAME}/result'
 # data_path = 'E:\work\kitti360\code\processed/vegetation/trans'
-data_path = 'E:\work\kitti360\code\processed/building/data'
+data_path = 'E:\work\kitti360\code\processed/building_new/data'
 dirs = os.listdir(path)
 
-work_dir = 'E:\work\kitti360\code/net\experiments_new/fixscale_building'
+work_dir = f'E:\work\kitti360\code/net\experiments_gID/building_new/{NAME}'
 
 mesh_dir = 'E:\work\kitti360\kitti360Scripts\kitti360scripts\custom/all_bboxes'
 
@@ -31,9 +35,11 @@ for dir in dirs:
         pcd = npy2pcd(f'{data_path}/{dir}/{grid}/all.npy')
 
         # o3d.visualization.draw_geometries([pcd])
-        origin_meshes = get_meshes(f'{mesh_dir}/{dir}/21/{grid}')
+        origin_meshes = get_meshes(f'{mesh_dir}/{dir}/{cat_ID}/{grid}')
+        
         gt_meshes = get_meshes(f'{path}/{dir}/{grid}/gt')
         meshes = get_meshes(f'{path}/{dir}/{grid}/pre')
+        pre_dirs = get_meshes(f'{path}/{dir}/{grid}/pre_dir')
 
         # o3d.visualization.draw_geometries([pcd] + gt_meshes)
         # o3d.visualization.draw_geometries([pcd] + meshes)
@@ -49,10 +55,12 @@ for dir in dirs:
         for i in range(1, len(meshes)):
             gt_meshes[0] += gt_meshes[i]
             meshes[0] += meshes[i]
+            pre_dirs[0] += pre_dirs[i]
 
         os.makedirs(f'{work_dir}/samples/{dir}/{grid}', exist_ok=True)
         o3d.io.write_point_cloud(f'{work_dir}/samples/{dir}/{grid}/pcd.ply', pcd)
         o3d.io.write_triangle_mesh(f'{work_dir}/samples/{dir}/{grid}/gt.ply', gt_meshes[0])
         o3d.io.write_triangle_mesh(f'{work_dir}/samples/{dir}/{grid}/pre.ply', meshes[0])
+        o3d.io.write_triangle_mesh(f'{work_dir}/samples/{dir}/{grid}/pre_dir.ply', pre_dirs[0])
         o3d.io.write_triangle_mesh(f'{work_dir}/samples/{dir}/{grid}/origin.ply', origin_mesh)
         # quit()
