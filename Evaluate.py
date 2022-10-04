@@ -12,9 +12,8 @@ import numpy as np
 from Modules import SplitNet
 
 def evaluation(val_loader, model, args):
-    # model.eval()
+    model.eval()
     print ('evaluating')
-    criterion = torch.nn.MSELoss()
 
     losses = []
     L1, L2, L3 = [], [], []
@@ -24,56 +23,47 @@ def evaluation(val_loader, model, args):
         input = data['pts'].to(args.device).permute(0, 2, 1)
         output = data['output'].to(args.device)
 
-        # input = torch.zeros_like(input).to(args.device)
-        # print (input.dtype)
-        # ret = model(input)
-
         ret = model.step(input, output)[0]
 
-        loss = ret[0] * args.w[0] - ret[1] * args.w[1] + ret[2] * args.w[2]
+        loss = ret[0] * args.w[0] + ret[1] * args.w[1] + ret[2] * args.w[2]
+
         losses.append(loss.item())
         L1.append(ret[0].item())
         L2.append(ret[1].item())
         L3.append(ret[2].item())
 
-        print (np.mean(L1), np.mean(L2), np.mean(L3))
-
     return np.mean(losses), np.mean(L1), np.mean(L2), np.mean(L3)
 
-def visualize(val_set, val_loader, model, args):
+def visualize(val_loader, model, args):
+    import open3d as o3d
+
     model.eval()
     print ('visualizing')
-    criterion = torch.nn.MSELoss()
 
     losses = []
     cnt = {}
 
-    import open3d as o3d
-
     for idx, data in enumerate(val_loader):
-        # if data['pcd_path'][0][:-8] != '0/1537':
-        #     continue
             
         input = data['pts'].to(args.device).permute(0, 2, 1)
         output = data['output'].to(args.device)
         loss, ret = model.step(input, output)
 
-        loss = criterion(ret, output)
         losses.append(loss.item())
 
         # feature = model.extract(input.permute(0, 2, 1)).reshape(-1, 11, 11, 11, 33)
         # import matplotlib.pyplot as plt
+
         ret = ret.detach().to('cpu')
         for i in range(args.batch_size):
-            sample_path = data['pcd_path'][i][:-8]
+            wds = data['pcd_path'][i].split('/')
+            sample_path = wds[0] + '/' + wds[1]
             print (sample_path)
-            # if (sample_path != '0/1537'):
-            #     continue
-            pcd, gt_mesh, mesh, bbox_line, pre_dir = vis_sample(data['pts'][i], data['output'][i], ret[i], args)
-            # visualize_sample(data['pts'][i], data['R'][i], data['T'][i], ret[i], args)
 
+            pcd, gt_mesh, mesh, bbox_line, pre_dir = vis_sample(data['pts'][i], data['output'][i], ret[i], args)
+
+            # visualize_sample(data['pts'][i], data['R'][i], data['T'][i], ret[i], args)
             # feat = np.array(feature[i].cpu())
-            
 
             if sample_path in cnt:
                 cnt[sample_path] += 1
@@ -95,37 +85,26 @@ def visualize(val_set, val_loader, model, args):
             
             with open(f'{args.work_dir}/origin/{sample_path}/{cnt[sample_path]}/info.json', 'w') as f:
                 json.dump(result, f)
-
-
-            # with open(f'{args.work_dir}/origin/{sample_path}/{cnt[sample_path]}/out.txt')
-
-            # print (data['output'])
-            # quit()
-        
         
 
     return np.mean(losses)
 
-def calcIoU(val_set, val_loader, model, args):
+def calcIoU(val_loader, model, args):
     import open3d as o3d
 
     model.eval()
     print ('calculating 3d IoU')
-    criterion = torch.nn.MSELoss()
 
     losses = []
-
-    results = []
-    cnt = {}
-
     IoUs = []
+
     print ('total:', len(val_loader))
     for idx, data in enumerate(val_loader):
         if idx % 10 == 0:
             print (idx)
             
         inputs = data['pts'].to(args.device).permute(0, 2, 1)
-        # input = torch.zeros_like(input).to(args.device)
+        
         output = data['output'].to(args.device)
         loss, ret = model.step(inputs, output)
 
@@ -135,11 +114,10 @@ def calcIoU(val_set, val_loader, model, args):
 
         ret = ret.detach().to('cpu')
         for i in range(args.batch_size):
-            # ret[i, 3] = torch.arcsin(ret[i, 3])
-            sample_path = data['pcd_path'][i][:-8]
+            wds = data['pcd_path'][i].split('/')
+            sample_path = wds[0] + '/' + wds[1]
 
             mesh = test_sample_dec(data['output'][i], ret[i], data['aug'][i], data['trans'][i], args)
-
             # gt_mesh = o3d.io.read_triangle_mesh(os.path.join(args.data_path, 'std.ply'))
 
             o3d.io.write_triangle_mesh("clibs/std.ply", mesh[0])
@@ -153,38 +131,27 @@ def calcIoU(val_set, val_loader, model, args):
                 IoUs.append(IoU)
             except:
                 pass
-            # results.append(ret)
+            
         print (sample_path, np.mean(IoUs))
 
         if idx == 1000:
             break
-    # with open(f'{args.work_dir}/result.pkl,)
 
     return np.mean(IoUs)
 
-def process(val_set, val_loader, model, args):
+def process(val_loader, model, args):
     import open3d as o3d
 
     model.eval()
     print ('processing')
-    criterion = torch.nn.MSELoss()
 
     losses = []
-
-    results = []
     cnt = {}
 
     for idx, data in enumerate(val_loader):
             
         input = data['pts'].to(args.device).permute(0, 2, 1)
-        
         output = data['output'].to(args.device)
-        # input = torch.zeros_like(input).to(args.device)
-        # print (input.dtype)
-        # ret = model(input)
-
-        # loss = criterion(ret, output)
-        # 
 
         loss, ret = model.step(input, output)
         loss = loss[0] * args.w[0] + loss[1] * args.w[1] + loss[2] * args.w[2]
@@ -195,8 +162,8 @@ def process(val_set, val_loader, model, args):
         for i in range(args.batch_size):
             wds = data['pcd_path'][i].split('/')
             sample_path = wds[0] + '/' + wds[1]
-            # ret[i, 3] = torch.arcsin(ret[i, 3])
-            print (ret[i, 3], sample_path)
+            print (sample_path)
+            
             mesh = test_sample_dec(data['output'][i], ret[i], data['aug'][i], data['trans'][i], args)
             
 
@@ -212,16 +179,13 @@ def process(val_set, val_loader, model, args):
             o3d.io.write_triangle_mesh(f'{args.work_dir}/result/{sample_path}/gt/{cnt[sample_path]}.ply', mesh[0])
             o3d.io.write_triangle_mesh(f'{args.work_dir}/result/{sample_path}/pre/{cnt[sample_path]}.ply', mesh[1])
             o3d.io.write_triangle_mesh(f'{args.work_dir}/result/{sample_path}/pre_dir/{cnt[sample_path]}.ply', mesh[2])
-            # results.append(ret)
-
-    # with open(f'{args.work_dir}/result.pkl,)
+            
 
     return np.mean(losses)
 
 from Options import getparser
 
 if __name__ == '__main__':
-    # pass
     parser = getparser()
     args = parser.parse_args()
 
@@ -272,12 +236,26 @@ if __name__ == '__main__':
         shuffle=True,
         #num_workers=8,
     )
-    # visualize(dataset, loader, model, args)
+
+    print (model)
+
+    # visualize the normalized meshes, which is directly used by the networks
+    # visualize(loader, model, args)
+    # ---------------------------------
+
+    # evaluate the model
     # evaluation(val_loader, model, args)
-    # process(dataset, loader, model, args)
-    IoU = calcIoU(dataset, val_loader, model, args)
+    # ---------------------------------
+
+    # visualize the meshes in the world frame, then we can run `vis.py' to combine the meshes
+    # process(loader, model, args)
+    # ---------------------------------
+
+    # calculate the 3D IoU
+    IoU = calcIoU(val_loader, model, args)
 
     with open(f'{args.work_dir}/IoU.txt', 'w') as f:
         print (IoU, file=f)
+    # ---------------------------------
 
-    print (model)
+    
